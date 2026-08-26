@@ -1,52 +1,13 @@
-"""
-content_generator.py
-
-Two ways to generate study notes for a topic:
-
-1. generate_grounded_content(topic) -- RAG mode. Retrieves the most
-   relevant chunks from whatever reference material has been uploaded
-   and indexed, and asks the LLM to write notes using ONLY that material.
-   Raises NoReferenceMaterialError if nothing relevant is indexed.
-
-2. generate_general_content(topic) -- no-upload mode. Skips retrieval
-   entirely and asks the LLM to write notes from its own general
-   knowledge. No source material required, but no grounding guarantee
-   either -- this is plain LLM generation, included so the app still
-   works for topics the user hasn't uploaded anything for.
-
-Run directly to test grounded mode:
-    python content_generator.py
-"""
-
-from rag_utils import get_collection
 from llm_utils import generate_text
-
-TOP_K = 4  # how many chunks to retrieve per query
-
-
-class NoReferenceMaterialError(Exception):
-    """Raised when there's nothing indexed yet, or nothing relevant to the topic."""
-    pass
+from rag_utils import retrieve_context
 
 
-def retrieve_context(topic, top_k=TOP_K):
-    """Query the vector store with the topic text directly -- Chroma embeds
-    the query locally using the same model it used to embed the documents.
-    Returns ([], []) if the store is empty rather than raising, so callers can
-    decide how to handle 'no material yet' as a normal case, not a crash."""
-    collection = get_collection()
-    if collection.count() == 0:
-        return [], []
-
-    results = collection.query(query_texts=[topic], n_results=min(top_k, collection.count()))
-
-    chunks = results["documents"][0]
-    sources = [meta["source"] for meta in results["metadatas"][0]]
-    return chunks, sources
+TOP_K = 4
 
 
-def _build_grounded_prompt(topic, chunks):
+def build_prompt(topic, chunks):
     context = "\n\n---\n\n".join(chunks)
+
     return f"""You are a study-notes generator for a student preparing for exams.
 
 Using ONLY the reference material below, write clear, structured study notes
@@ -56,78 +17,73 @@ Reference material:
 {context}
 
 Instructions:
-- Include: a short definition, key concepts explained simply, at least one
-  example, and any relevant formulas or complexity/rules mentioned in the text.
-- If the reference material does not fully cover the topic, say so explicitly
-  rather than filling gaps with outside knowledge.
-- Use clear headings and bullet points. Keep it exam-focused, not a full essay.
+- Include a short definition.
+- Explain the key concepts simply.
+- Include at least one example if the reference material provides enough information.
+- Include formulas, rules, or complexity information only when present in the reference.
+- Do not invent facts that are absent from the reference material.
+- If the reference material does not fully cover the topic, say so explicitly.
+- Use clear headings and bullet points.
+- Keep the notes exam-focused and concise.
 """
 
 
-def _build_general_prompt(topic):
-    return f"""You are a study-notes generator for a student preparing for exams.
+def generate_content(topic):
+    chunks, sources = retrieve_context(topic, top_k=TOP_K)
 
-Write clear, structured study notes on the topic: "{topic}"
-
-Instructions:
-- Include: a short definition, key concepts explained simply, at least one
-  worked example, and any relevant formulas, rules, or complexity details
-  that are standard/well-established for this topic.
-- Use clear headings and bullet points. Keep it exam-focused, not a full essay.
-- Stick to well-established, standard facts about this topic. If the topic
-  is too vague or ambiguous to address confidently, say so rather than
-  guessing.
-"""
-
-
-def generate_grounded_content(topic):
-    """RAG mode. Raises NoReferenceMaterialError if nothing relevant is indexed."""
-    if not topic or not topic.strip():
-        raise ValueError("Topic cannot be empty.")
-
-    chunks, sources = retrieve_context(topic)
     if not chunks:
-        raise NoReferenceMaterialError(
-            "No reference material is indexed yet, or nothing matched this topic. "
-            "Upload a .txt or .pdf file, or switch to general-knowledge mode."
+        return (
+            "No reference material found for this topic. "
+            "Add .txt files to data/ and run ingest.py first.",
+            [],
         )
 
-    prompt = _build_grounded_prompt(topic, chunks)
-    text = generate_text(prompt)
-    return text, sorted(set(sources))
+    notes = generate_text(
+        build_prompt(topic, chunks),
+        temperature=0.2,
+        max_tokens=3000,
+    )
+
+    return notes.strip(), sorted(set(sources))
 
 
-def generate_general_content(topic):
-    """No-upload mode. Always returns notes (assuming the API call succeeds);
-    sources list is empty since nothing was retrieved."""
-    if not topic or not topic.strip():
-        raise ValueError("Topic cannot be empty.")
-
-    prompt = _build_general_prompt(topic)
-    text = generate_text(prompt)
-    return text, []
+MAX_UPLOAD_CHARS = 12000
 
 
-# Backwards-compatible alias: existing code (quiz_generator, evaluator test
-# blocks) calls generate_content() expecting grounded behavior.
-def generate_content(topic):
-    return generate_grounded_content(topic)
+def generate_content_from_text(topic, text, source_name="Uploaded document"):
+    """
+    Generate study notes directly from a user-uploaded document's text,
+    bypassing the vector store entirely. Used by the "Upload document" mode.
+    """
+    text = (text or "").strip()
+
+    if not text:
+        return (
+            "The uploaded document appears to be empty or unreadable.",
+            [],
+        )
+
+    # Keep the prompt within a safe size; long documents are truncated.
+    truncated = text[:MAX_UPLOAD_CHARS]
+
+    notes = generate_text(
+        build_prompt(topic, [truncated]),
+        temperature=0.2,
+        max_tokens=3000,
+    )
+
+    return notes.strip(), [source_name]
 
 
 if __name__ == "__main__":
-    topic = input("Enter a syllabus topic: ")
-    mode = input("Mode - (g)rounded or (n)o-upload? [g/n]: ").strip().lower()
-    try:
-        if mode == "n":
-            notes, sources = generate_general_content(topic)
-        else:
-            notes, sources = generate_grounded_content(topic)
-        print("\n" + "=" * 60)
-        print(notes)
-        print("=" * 60)
-        if sources:
-            print(f"\nGrounded in: {', '.join(sources)}")
-        else:
-            print("\n(Generated from general knowledge, not grounded in uploaded material)")
-    except (NoReferenceMaterialError, ValueError, RuntimeError) as e:
-        print(f"Error: {e}")
+    topic = input("Enter a syllabus topic: ").strip()
+
+    if not topic:
+        raise SystemExit("Please enter a topic.")
+
+    notes, sources = generate_content(topic)
+
+    print("\n" + "=" * 60)
+    print(notes)
+    print("=" * 60)
+    print(f"\nGrounded in: {', '.join(sources) if sources else 'None'}")

@@ -11,9 +11,9 @@ pip install -r requirements.txt
 ```
 
 1. Copy `.env.example` to `.env`
-2. Paste your Groq API key into `.env`:
+2. Paste your Gemini API key into `.env`:
    ```
-   GROQ_API_KEY=your_actual_key_here
+   GEMINI_API_KEY=your_actual_key_here
    ```
 
 ## Usage

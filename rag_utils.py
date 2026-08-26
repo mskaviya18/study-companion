@@ -1,18 +1,20 @@
-"""
-rag_utils.py
+from pathlib import Path
 
-Shared helpers for turning raw text/PDF into chunks and storing them in
-the Chroma vector store. Embeddings are generated locally by Chroma's
-built-in model (all-MiniLM-L6-v2, runs on-device via onnxruntime) --
-no API key or quota needed for this step, only for the generation calls
-in llm_utils.py.
-"""
+# Streamlit Cloud's system sqlite3 is older than the 3.35.0 that chromadb
+# requires. Swap in the pysqlite3-binary wheel (added to requirements.txt)
+# before chromadb gets a chance to import the system sqlite3 module.
+try:
+    __import__("pysqlite3")
+    import sys
+
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    # Local dev on a machine with a modern system sqlite3 (e.g. recent
+    # macOS/Linux) doesn't need the swap — chromadb will work as-is.
+    pass
 
 import chromadb
 from pypdf import PdfReader
-from docx import Document
-from PIL import Image
-import pytesseract
 
 STORE_DIR = "chroma_store"
 COLLECTION_NAME = "study_material"
@@ -21,99 +23,107 @@ CHUNK_OVERLAP = 150
 
 
 def get_collection():
-    """Get the collection if it exists, or create an empty one. Never wipes data.
-    No embedding_function is specified, so Chroma uses its default local model --
-    the first call downloads a small (~80MB) model file, then it's fully offline."""
+    """Return the persistent Chroma collection using its default local embedding."""
     client = chromadb.PersistentClient(path=STORE_DIR)
-    return client.get_or_create_collection(COLLECTION_NAME)
+    return client.get_or_create_collection(
+        name=COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
 
 
 def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero.")
+
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap must be >= 0 and smaller than chunk_size.")
+
     chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end].strip()
+    step = chunk_size - overlap
+
+    for start in range(0, len(text), step):
+        chunk = text[start:start + chunk_size].strip()
         if chunk:
             chunks.append(chunk)
-        start += chunk_size - overlap
+
     return chunks
 
 
 def extract_text_from_pdf(file_obj):
-    """file_obj: a file-like object (works with Streamlit's UploadedFile or open())."""
+    """Extract text from a PDF file-like object."""
     reader = PdfReader(file_obj)
     pages_text = []
+
     for page in reader.pages:
-        text = page.extract_text() or ""
-        pages_text.append(text)
+        pages_text.append(page.extract_text() or "")
+
     return "\n".join(pages_text)
 
 
-def extract_text_from_docx(file_obj):
-    """file_obj: a file-like object (works with Streamlit's UploadedFile or open('rb'))."""
-    doc = Document(file_obj)
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    # Also pull text out of any tables, since syllabus/reference docs often use them
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                if cell.text.strip():
-                    paragraphs.append(cell.text)
-    return "\n".join(paragraphs)
-
-
-def extract_text_from_image(file_obj):
-    """
-    file_obj: a file-like object for a .png/.jpg/.jpeg image, e.g. a scanned page.
-    Requires the Tesseract OCR engine installed separately on the machine --
-    see README for setup. Raises a clear error if it's missing rather than a
-    cryptic one, since this is the most common failure point.
-    """
-    try:
-        image = Image.open(file_obj)
-        return pytesseract.image_to_string(image)
-    except pytesseract.TesseractNotFoundError:
-        raise RuntimeError(
-            "Tesseract OCR engine isn't installed or isn't on your PATH. "
-            "See README.md 'Setting up OCR' section for installation steps."
-        )
-
-
 def add_document_to_store(source_name, text):
-    """
-    Chunk and add a single document to the persistent collection. Chroma
-    embeds the chunks locally under the hood. Uses upsert-safe IDs
-    (source_name + chunk index) so re-adding the same file overwrites its
-    old chunks instead of duplicating them.
-    Returns the number of chunks added.
-    """
+    """Chunk and upsert one document into the persistent Chroma collection."""
+    source_name = Path(str(source_name)).name
     chunks = chunk_text(text)
+
     if not chunks:
         return 0
+
+    collection = get_collection()
+
+    # Remove stale chunks if the same source is re-added with fewer chunks.
+    existing = collection.get(where={"source": source_name})
+    old_ids = existing.get("ids", []) if existing else []
+    if old_ids:
+        collection.delete(ids=old_ids)
 
     ids = [f"{source_name}_{i}" for i in range(len(chunks))]
     metadatas = [{"source": source_name} for _ in chunks]
 
-    collection = get_collection()
-    collection.upsert(ids=ids, documents=chunks, metadatas=metadatas)
+    collection.add(
+        ids=ids,
+        documents=chunks,
+        metadatas=metadatas,
+    )
+
     return len(chunks)
 
 
-def list_sources():
-    """Return the distinct source filenames currently indexed, for display in the UI."""
+def retrieve_context(query, top_k=4):
+    """Retrieve the most relevant indexed chunks for a query."""
     collection = get_collection()
+
+    if collection.count() == 0:
+        return [], []
+
+    result = collection.query(
+        query_texts=[query],
+        n_results=min(top_k, collection.count()),
+    )
+
+    documents = result.get("documents", [[]])[0]
+    metadatas = result.get("metadatas", [[]])[0]
+
+    sources = [
+        metadata.get("source", "Unknown")
+        for metadata in metadatas
+        if metadata
+    ]
+
+    return documents, sources
+
+
+def list_sources():
+    """Return distinct source filenames currently indexed."""
+    collection = get_collection()
+
     if collection.count() == 0:
         return []
-    all_meta = collection.get()["metadatas"]
-    return sorted(set(m["source"] for m in all_meta))
 
-
-def delete_source(source_name):
-    """Remove every chunk belonging to one indexed file. Returns the number of chunks removed."""
-    collection = get_collection()
-    matches = collection.get(where={"source": source_name})
-    ids = matches["ids"]
-    if ids:
-        collection.delete(ids=ids)
-    return len(ids)
+    metadata = collection.get().get("metadatas", [])
+    return sorted(
+        {
+            item.get("source")
+            for item in metadata
+            if item and item.get("source")
+        }
+    )

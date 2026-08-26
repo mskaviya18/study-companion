@@ -6,3 +6,5 @@ groq
 python-docx
 pytesseract
 Pillow
+pysqlite3-binary
+pandas
