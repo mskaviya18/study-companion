@@ -9,7 +9,6 @@ WEAK_TOPIC_THRESHOLD = 60
 
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
-        # Create table if it doesn't exist
         conn.execute("""
             CREATE TABLE IF NOT EXISTS attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,68 +19,42 @@ def init_db():
                 timestamp DATETIME
             )
         """)
-        
-        # Add attempt_id column if missing
         try:
             conn.execute("ALTER TABLE attempts ADD COLUMN attempt_id TEXT")
         except sqlite3.OperationalError:
-            pass  # Column already exists
+            pass
 
 
 def record_quiz_results(topic, results, difficulty):
-    """Record individual question scores grouped under a unique attempt_id."""
     attempt_id = str(uuid.uuid4())
     ts = datetime.now(timezone.utc).isoformat()
 
     with sqlite3.connect(DB_PATH) as conn:
-        # 1. Record Multiple Choice results
         for item in results.get("mcq", []):
             conn.execute(
                 """
                 INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    topic,
-                    100.0 if item["correct"] else 0.0,
-                    difficulty,
-                    "mcq",
-                    attempt_id,
-                    ts,
-                ),
+                (topic, 100.0 if item["correct"] else 0.0, difficulty, "mcq", attempt_id, ts),
             )
 
-        # 2. Record Short Answer results
         for item in results.get("short_answer", []):
             conn.execute(
                 """
                 INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    topic,
-                    float(item["score"]),
-                    difficulty,
-                    "short_answer",
-                    attempt_id,
-                    ts,
-                ),
+                (topic, float(item["score"]), difficulty, "short_answer", attempt_id, ts),
             )
 
         conn.commit()
 
 
 def get_topic_mastery(topic):
-    """Average score over the most recent ROLLING_WINDOW questions."""
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
-            """
-            SELECT score
-            FROM attempts
-            WHERE topic = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
+            "SELECT score FROM attempts WHERE topic = ? ORDER BY id DESC LIMIT ?",
             (topic, ROLLING_WINDOW),
         ).fetchall()
 
@@ -93,64 +66,38 @@ def get_topic_mastery(topic):
 
 
 def get_recommended_difficulty(topic):
-    """Choose difficulty from current topic mastery."""
     mastery = get_topic_mastery(topic)
-
     if mastery is None:
         return "medium"
-
     if mastery < 50:
         return "easy"
-
     if mastery < 80:
         return "medium"
-
     return "hard"
 
 
 def get_all_topics_summary():
-    """Return one summary dictionary per attempted topic."""
     with sqlite3.connect(DB_PATH) as conn:
-        topics = [
-            row[0]
-            for row in conn.execute(
-                "SELECT DISTINCT topic FROM attempts"
-            ).fetchall()
-        ]
-
+        topics = [row[0] for row in conn.execute("SELECT DISTINCT topic FROM attempts").fetchall()]
         summary = []
 
         for topic in topics:
-            # Count distinct attempt_ids, falling back to distinct timestamps for old legacy data
             count = conn.execute(
-                """
-                SELECT COUNT(DISTINCT COALESCE(attempt_id, timestamp)) 
-                FROM attempts 
-                WHERE topic = ?
-                """,
+                "SELECT COUNT(DISTINCT COALESCE(attempt_id, timestamp)) FROM attempts WHERE topic = ?",
                 (topic,),
             ).fetchone()[0]
 
             mastery = get_topic_mastery(topic)
-
-            summary.append(
-                {
-                    "topic": topic,
-                    "mastery": mastery,
-                    "attempts": count,
-                }
-            )
+            summary.append({"topic": topic, "mastery": mastery, "attempts": count})
 
         return summary
 
 
 def get_topic_attempt_history(topic, limit=20):
-    """Return historical scores grouped by quiz run (attempt_id or timestamp)."""
     with sqlite3.connect(DB_PATH) as conn:
-        # Group by attempt_id (or timestamp for legacy rows) to calculate average per quiz run
         rows = conn.execute(
             """
-            SELECT COALESCE(attempt_id, timestamp) as group_key, AVG(score) as average_score, MIN(timestamp) as ts
+            SELECT COALESCE(attempt_id, timestamp) as group_key, AVG(score), MIN(timestamp) as ts
             FROM attempts
             WHERE topic = ?
             GROUP BY group_key
@@ -160,11 +107,7 @@ def get_topic_attempt_history(topic, limit=20):
         ).fetchall()
 
     history = [{"score": round(row[1], 1)} for row in rows]
-
-    if limit:
-        history = history[-limit:]
-
-    return history
+    return history[-limit:] if limit else history
 
 
 def get_weak_topics(threshold=WEAK_TOPIC_THRESHOLD):
