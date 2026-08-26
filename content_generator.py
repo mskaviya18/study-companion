@@ -1,11 +1,10 @@
 from llm_utils import generate_text
 from rag_utils import retrieve_context
 
-
 TOP_K = 4
 
 
-def build_prompt(topic, chunks):
+def build_prompt_with_context(topic, chunks):
     context = "\n\n---\n\n".join(chunks)
 
     return f"""You are a study-notes generator for a student preparing for exams.
@@ -22,27 +21,37 @@ Instructions:
 - Include at least one example if the reference material provides enough information.
 - Include formulas, rules, or complexity information only when present in the reference.
 - Do not invent facts that are absent from the reference material.
-- If the reference material does not fully cover the topic, say so explicitly.
 - Use clear headings and bullet points.
 - Keep the notes exam-focused and concise.
+"""
+
+
+def build_prompt_fallback(topic):
+    return f"""You are an expert AI study companion.
+
+Generate comprehensive, well-structured study notes for a student preparing for exams on the topic: "{topic}"
+
+Instructions:
+- Include a clear short definition.
+- Explain core concepts simply and thoroughly.
+- Provide practical examples and code snippets where relevant.
+- List key properties, time/space complexities, or important rules if applicable.
+- Use clear markdown headings, bold text, and bullet points.
+- Keep the notes exam-focused, structured, and easy to memorize.
 """
 
 
 def generate_content(topic):
     chunks, sources = retrieve_context(topic, top_k=TOP_K)
 
+    # If no local reference files are found in data/, fall back to pure AI generation
     if not chunks:
-        return (
-            "No reference material found for this topic. "
-            "Add .txt files to data/ and run ingest.py first.",
-            [],
-        )
+        prompt = build_prompt_fallback(topic)
+        notes = generate_text(prompt, temperature=0.3, max_tokens=3000)
+        return notes.strip(), ["AI General Knowledge"]
 
-    notes = generate_text(
-        build_prompt(topic, chunks),
-        temperature=0.2,
-        max_tokens=3000,
-    )
+    prompt = build_prompt_with_context(topic, chunks)
+    notes = generate_text(prompt, temperature=0.2, max_tokens=3000)
 
     return notes.strip(), sorted(set(sources))
 
@@ -67,7 +76,7 @@ def generate_content_from_text(topic, text, source_name="Uploaded document"):
     truncated = text[:MAX_UPLOAD_CHARS]
 
     notes = generate_text(
-        build_prompt(topic, [truncated]),
+        build_prompt_with_context(topic, [truncated]),
         temperature=0.2,
         max_tokens=3000,
     )
