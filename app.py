@@ -282,12 +282,37 @@ elif st.session_state.stage == "results":
         )
         st.bar_chart(chart_df)
 
-    if st.button("Study another topic", type="primary"):
-        st.session_state.stage = "input"
-        st.session_state.topic = ""
-        st.session_state.notes = ""
-        st.session_state.sources = []
-        st.session_state.quiz = None
-        st.session_state.quiz_id = ""
-        st.session_state.results = None
-        st.rerun()
+    # --- NEW: Action Buttons for Retaking or Changing Topics ---
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Retake quiz (Same Topic)", type="primary", use_container_width=True):
+            # Recalculate difficulty based on new mastery score
+            st.session_state.difficulty = get_recommended_difficulty(st.session_state.topic)
+            
+            with st.spinner("Generating a new quiz..."):
+                try:
+                    st.session_state.quiz = generate_quiz(
+                        st.session_state.topic,
+                        st.session_state.notes,
+                        difficulty=st.session_state.difficulty,
+                    )
+                except Exception as exc:
+                    st.error(f"Could not generate quiz: {exc}")
+                else:
+                    # Generate fresh key ID to clear inputs
+                    st.session_state.quiz_id = str(uuid.uuid4())
+                    st.session_state.results = None
+                    st.session_state.stage = "quiz"
+                    st.rerun()
+
+    with col2:
+        if st.button("Study another topic", use_container_width=True):
+            st.session_state.stage = "input"
+            st.session_state.topic = ""
+            st.session_state.notes = ""
+            st.session_state.sources = []
+            st.session_state.quiz = None
+            st.session_state.quiz_id = ""
+            st.session_state.results = None
+            st.rerun()
