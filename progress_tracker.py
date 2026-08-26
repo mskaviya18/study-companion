@@ -9,19 +9,23 @@ WEAK_TOPIC_THRESHOLD = 60
 
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
+        # Create table if it doesn't exist
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                topic TEXT NOT NULL,
-                question_type TEXT NOT NULL,
-                score REAL NOT NULL,
-                difficulty TEXT NOT NULL,
-                timestamp TEXT NOT NULL
+                topic TEXT,
+                score REAL,
+                difficulty TEXT,
+                question_type TEXT,
+                timestamp DATETIME
             )
-            """
-        )
-        conn.commit()
+        """)
+        
+        # Add attempt_id column if missing
+        try:
+            conn.execute("ALTER TABLE attempts ADD COLUMN attempt_id TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
 
 def record_quiz_results(topic, results, difficulty):
