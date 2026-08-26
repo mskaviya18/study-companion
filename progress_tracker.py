@@ -1,4 +1,5 @@
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 
 DB_PATH = "progress.db"
