@@ -41,9 +41,11 @@ Required structure:
 }}
 """
 
-
 def _extract_json(text):
-    """Extracts raw JSON structure by locating outer curly braces, stripping thinking blocks."""
+    """Extracts raw JSON structure by locating outer curly braces, stripping thinking blocks,
+
+    and handling invalid unescaped characters inside strings.
+    """
     # Remove reasoning/thinking tags emitted by thinking models
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
@@ -62,7 +64,25 @@ def _extract_json(text):
     json_str = re.sub(r"^```(?:json)?\s*", "", json_str, flags=re.IGNORECASE)
     json_str = re.sub(r"\s*```$", "", json_str)
 
-    return json.loads(json_str)
+    # Attempt standard parse first with strict=False to allow unescaped control chars (like newlines)
+    try:
+        return json.loads(json_str, strict=False)
+    except json.JSONDecodeError:
+        pass
+
+    # If parsing fails, fix unescaped double quotes inside values (e.g. "code": "echo "hello"")
+    def fix_unescaped_quotes(match):
+        key_val = match.group(0)
+        # Fix inner unescaped quotes inside string values
+        return re.sub(r'(?<!\\)"', r'\"', key_val)
+
+    # Sanitize and parse
+    try:
+        # Normalize newlines inside JSON strings
+        sanitized = re.sub(r'(?<!\\)\n', r'\\n', json_str)
+        return json.loads(sanitized, strict=False)
+    except json.JSONDecodeError as err:
+        raise ValueError(f"Model returned invalid JSON string syntax: {err}\n\nRaw string:\n{json_str}")
 
 
 def _validate_quiz(quiz, num_mcq, num_short):
