@@ -24,30 +24,38 @@ def init_db():
 
 
 def record_quiz_results(topic, results, difficulty):
-    """Insert one row per question from an evaluator results dictionary."""
-    now = datetime.now(timezone.utc).isoformat()
+    attempt_id = str(uuid.uuid4())  # Groups all questions from this single quiz run
+
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            INSERT INTO attempts (topic, score, difficulty, timestamp)
-            VALUES (?, ?, ?, datetime('now'))
-            """,
-            (topic, results["overall_score"], difficulty),
-        )
-        conn.commit()
-        for result in results.get("short_answer", []):
+        # 1. Record Multiple Choice results
+        for item in results.get("mcq", []):
             conn.execute(
                 """
-                INSERT INTO attempts
-                (topic, question_type, score, difficulty, timestamp)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
                 """,
                 (
                     topic,
-                    "short_answer",
-                    result["score"],
+                    100.0 if item["correct"] else 0.0,
                     difficulty,
-                    now,
+                    "mcq",  # Fixed NOT NULL constraint for MCQ
+                    attempt_id,
+                ),
+            )
+
+        # 2. Record Short Answer results
+        for item in results.get("short_answer", []):
+            conn.execute(
+                """
+                INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    topic,
+                    float(item["score"]),
+                    difficulty,
+                    "short_answer",  # Fixed NOT NULL constraint for Short Answer
+                    attempt_id,
                 ),
             )
 

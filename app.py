@@ -42,10 +42,10 @@ with st.sidebar:
     else:
         for topic_summary in summary:
             mastery = topic_summary["mastery"]
-            label = (
-                f"{topic_summary['topic']} — "
-                f"{mastery}/100 ({topic_summary['attempts']} attempts)"
-            )
+            # Fix display label
+            attempts_count = topic_summary.get("attempts", 0)
+            label = f"{topic_summary['topic']} — {mastery}/100 ({attempts_count} attempts)"
+            
             if mastery < 60:
                 st.warning(label)
             else:
@@ -258,7 +258,6 @@ elif st.session_state.stage == "results":
                 f"**Explanation:** {result['explanation']}"
             )
 
-    st.markdown("---")
     st.markdown("---")
     st.markdown("### Short answer")
     for i, result in enumerate(results["short_answer"], 1):
