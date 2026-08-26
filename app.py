@@ -190,16 +190,12 @@ if not list_sources():
         except Exception:
             pass
 
-if "username" not in st.session_state:
-    st.session_state.username = ""
-
 # ---- Banner + top-right menu ----
 banner_col, menu_col = st.columns([7, 1])
 with banner_col:
-    greeting = f"Welcome back, {st.session_state.username}" if st.session_state.username else "Syllabus → Notes → Quiz"
-    st.markdown(f"""
+    st.markdown("""
     <div class="app-banner">
-        <div class="eyebrow">{greeting}</div>
+        <div class="eyebrow">Syllabus → Notes → Quiz</div>
         <h1>The Study Companion</h1>
         <div class="tagline">Grounded notes, adaptive quizzes, and a record of what you actually know.</div>
     </div>
@@ -207,13 +203,6 @@ with banner_col:
 
 with menu_col:
     with st.popover("☰"):
-        st.markdown("**Account**")
-        st.session_state.username = st.text_input(
-            "Your name", value=st.session_state.username, placeholder="e.g. Kaviya",
-            label_visibility="collapsed",
-        )
-
-        st.divider()
         st.markdown("**Knowledge base**")
         indexed_now = list_sources()
         if not indexed_now:
@@ -229,9 +218,6 @@ with menu_col:
                         st.rerun()
 
         st.divider()
-        if st.button("📈 View progress chart", use_container_width=True):
-            st.session_state.stage = "progress_chart"
-            st.rerun()
         if st.button("Reset all progress data", use_container_width=True):
             reset_progress()
             st.rerun()
@@ -275,69 +261,66 @@ with st.sidebar:
     st.divider()
     section_header("chart", "Your progress")
     summary = get_all_topics_summary()
+    timeline = get_mastery_timeline()
     if not summary:
         st.caption("No attempts yet. Take a quiz to see your progress here.")
     else:
         for t in summary:
-            accent = "#4CE0B3" if t["mastery"] >= 60 else "#FF4D9D"
-            fill_pct = max(0, min(100, t["mastery"]))
+            topic_history = sorted(
+                [row for row in timeline if row["topic"] == t["topic"]],
+                key=lambda r: r["timestamp"],
+            )
+            latest_score = topic_history[-1]["score"] if topic_history else t["mastery"]
+            prev_score = topic_history[-2]["score"] if len(topic_history) > 1 else None
+            delta = round(latest_score - prev_score, 1) if prev_score is not None else None
+
+            up = delta is not None and delta > 0
+            down = delta is not None and delta < 0
+            delta_color = T["mint"] if up else (T["magenta"] if down else "rgba(233,228,251,0.5)")
+            arrow = "▲" if up else ("▼" if down else "—")
+            delta_text = f"{arrow} {abs(delta):.1f}" if delta is not None else "first attempt"
+            line_color = T["mint"] if latest_score >= 60 else T["magenta"]
+
             st.markdown(f"""
-            <div style="border-left:3px solid {accent}; background:rgba(32,18,69,0.6);
-                        border-radius:3px; padding:0.5rem 0.7rem; margin-bottom:0.5rem;">
+            <div style="background:rgba(32,18,69,0.6); border:1px solid {T['hair']};
+                        border-radius:6px; padding:0.6rem 0.8rem; margin-bottom:0.6rem;">
                 <div style="display:flex; justify-content:space-between; align-items:baseline;">
-                    <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; color:#E9E4FB; font-size:0.92rem;">
+                    <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; color:#E9E4FB; font-size:0.9rem;">
                         {t['topic']}
                     </span>
-                    <span style="font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:{accent};">
-                        {t['mastery']}/100
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:0.95rem; color:{line_color}; font-weight:600;">
+                        {latest_score:.0f}
                     </span>
                 </div>
-                <div style="background:rgba(233,228,251,0.12); border-radius:4px; height:6px; margin-top:0.4rem; overflow:hidden;">
-                    <div style="background:{accent}; width:{fill_pct}%; height:100%; border-radius:4px; transition:width 0.4s ease;"></div>
-                </div>
-                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:rgba(233,228,251,0.55); margin-top:0.3rem;">
-                    {t['attempts']} attempt{'s' if t['attempts'] != 1 else ''}
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:{delta_color}; margin-top:0.1rem;">
+                    {delta_text} · {t['attempts']} attempt{'s' if t['attempts'] != 1 else ''}
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-# ---- Stage: interactive progress chart (reachable from the menu at any point) ----
-if st.session_state.stage == "progress_chart":
-    section_header("chart", "Mastery over time")
+            if len(topic_history) >= 2:
+                df = pd.DataFrame(topic_history)
+                df["idx"] = range(len(df))
+                spark = (
+                    alt.Chart(df)
+                    .mark_area(line={"color": line_color, "size": 1.5}, opacity=0.15, color=line_color)
+                    .encode(
+                        x=alt.X("idx:O", axis=None),
+                        y=alt.Y("score:Q", axis=None, scale=alt.Scale(domain=[0, 100])),
+                        tooltip=[
+                            alt.Tooltip("timestamp:T", title="Date", format="%b %d, %H:%M"),
+                            alt.Tooltip("score:Q", title="Score"),
+                        ],
+                    )
+                    .properties(height=44)
+                    .configure_view(strokeWidth=0)
+                )
+                st.altair_chart(spark, use_container_width=True)
 
-    timeline = get_mastery_timeline()
-    if not timeline:
-        st.info("No quiz attempts yet. Take a quiz first, then come back to see your trend here.")
-    else:
-        df = pd.DataFrame(timeline)
-        chart = (
-            alt.Chart(df)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X("timestamp:T", title="Date"),
-                y=alt.Y("score:Q", title="Score", scale=alt.Scale(domain=[0, 100])),
-                color=alt.Color("topic:N", title="Topic",
-                                 scale=alt.Scale(range=[T["accent"], T["violet"], T["mint"], T["magenta"], T["accent-light"]])),
-                tooltip=[
-                    alt.Tooltip("topic:N", title="Topic"),
-                    alt.Tooltip("timestamp:T", title="Date", format="%b %d, %Y %H:%M"),
-                    alt.Tooltip("score:Q", title="Score"),
-                ],
-            )
-            .properties(height=380)
-            .configure_axis(labelColor=T["paper"], titleColor=T["paper"], gridColor=T["hair"])
-            .configure_legend(labelColor=T["paper"], titleColor=T["paper"])
-            .configure_view(strokeWidth=0)
-        )
-        st.altair_chart(chart, use_container_width=True)
-        st.caption("Hover over a point to see the exact topic, date, and score for that quiz attempt.")
 
-    if st.button("← Back"):
-        st.session_state.stage = "input"
-        st.rerun()
 
 # ---- Stage 1: topic input ----
-elif st.session_state.stage == "input":
+if st.session_state.stage == "input":
     mode = st.radio(
         "How should notes be generated?",
         ["From my uploaded material (grounded)", "From AI's general knowledge (no upload needed)"],

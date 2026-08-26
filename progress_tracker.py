@@ -97,7 +97,9 @@ def get_all_topics_summary():
     for topic in topics:
         mastery = get_topic_mastery(topic)
         conn = sqlite3.connect(DB_PATH)
-        count = conn.execute("SELECT COUNT(*) FROM attempts WHERE topic = ?", (topic,)).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(DISTINCT timestamp) FROM attempts WHERE topic = ?", (topic,)
+        ).fetchone()[0]
         conn.close()
         summary.append({"topic": topic, "mastery": mastery, "attempts": count})
     return sorted(summary, key=lambda x: x["mastery"])
