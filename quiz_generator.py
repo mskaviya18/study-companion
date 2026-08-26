@@ -42,39 +42,27 @@ Required structure:
 """
 
 
-def _strip_code_fences(text):
-    text = text.strip()
-    
-    # Remove reasoning/thinking tags emitted by thinking models
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    text = text.strip()
-
-    # Remove markdown code block fences
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```$", "", text)
-    return text.strip()
-
-
 def _extract_json(text):
-    cleaned = _strip_code_fences(text)
+    """Extracts raw JSON structure by locating outer curly braces, stripping thinking blocks."""
+    # Remove reasoning/thinking tags emitted by thinking models
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
+    # Find boundaries of the JSON object
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
 
-        if start == -1 or end == -1 or end <= start:
-            raise ValueError(
-                f"Model did not return valid JSON. Raw output was:\n{cleaned}"
-            )
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError(
+            f"Model did not return valid JSON. Raw output was:\n{cleaned}"
+        )
 
-        try:
-            return json.loads(cleaned[start:end + 1])
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Model did not return valid JSON. Raw output was:\n{cleaned}"
-            ) from exc
+    json_str = cleaned[start : end + 1]
+
+    # Strip code block wrappers if left inside bounds
+    json_str = re.sub(r"^```(?:json)?\s*", "", json_str, flags=re.IGNORECASE)
+    json_str = re.sub(r"\s*```$", "", json_str)
+
+    return json.loads(json_str)
 
 
 def _validate_quiz(quiz, num_mcq, num_short):
@@ -92,8 +80,7 @@ def _validate_quiz(quiz, num_mcq, num_short):
 
     if len(short_answer) != num_short:
         raise ValueError(
-            f"Expected {num_short} short-answer questions, "
-            f"received {len(short_answer)}."
+            f"Expected {num_short} short-answer questions, received {len(short_answer)}."
         )
 
     for index, question in enumerate(mcq, 1):

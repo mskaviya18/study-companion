@@ -6,9 +6,6 @@ Scores a completed quiz (as produced by quiz_generator.py):
 - Short-answer responses are graded by an LLM, which checks the student's
   free-text answer against the expected key_points and returns a score
   plus a short explanation of what was right or missing.
-
-This module also runs the quiz interactively end-to-end for testing:
-    python evaluator.py
 """
 
 import json
@@ -22,20 +19,22 @@ MAX_ATTEMPTS = 2
 
 
 def _strip_code_fences(text):
-    text = text.strip()
-
     # Remove reasoning/thinking tags emitted by thinking models
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    text = text.strip()
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    # Remove markdown code block fences
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```$", "", text)
-    return text.strip()
+    # Isolate JSON object between curly braces
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        cleaned = cleaned[start : end + 1]
+
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned.strip()
 
 
 def evaluate_mcq(question, selected_index):
-    """Direct comparison -- no LLM call, no failure mode beyond a bad index."""
+    """Direct comparison -- no LLM call."""
     correct = selected_index == question["correct_index"]
     return {
         "correct": correct,
@@ -46,9 +45,7 @@ def evaluate_mcq(question, selected_index):
 
 
 def evaluate_short_answer(question, student_answer):
-    """LLM-graded: checks the free-text answer against expected key points.
-    Retries once on a malformed response before falling back to a safe default
-    so one bad grading call doesn't crash the whole results page."""
+    """LLM-graded: checks free-text answer against expected key points."""
     key_points = question.get("key_points", [])
     ideal_answer = question.get("ideal_answer") or question.get("correct_answer", "")
 
@@ -86,16 +83,14 @@ Return ONLY valid JSON, no markdown fences, in this exact structure:
             if "score" not in result:
                 raise ValueError("Missing 'score' key")
             
-            # Ensure ideal_answer is attached for app.py UI
             result["ideal_answer"] = ideal_answer
             return result
         except (json.JSONDecodeError, ValueError) as e:
             last_error = e
             continue
         except RuntimeError:
-            raise  # propagate API-level failures immediately
+            raise
 
-    # Fallback: don't crash the results page over a grading hiccup
     return {
         "score": 0,
         "covered_points": [],
@@ -106,11 +101,6 @@ Return ONLY valid JSON, no markdown fences, in this exact structure:
 
 
 def evaluate_quiz(quiz, mcq_answers, short_answers):
-    """
-    mcq_answers: list of selected option indices, same order as quiz['mcq']
-    short_answers: list of free-text strings, same order as quiz['short_answer']
-    Returns a results dict with per-question feedback and an overall score.
-    """
     results = {"mcq": [], "short_answer": [], "overall_score": 0}
     total_points, earned_points = 0, 0
 
