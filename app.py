@@ -1,3 +1,4 @@
+import uuid
 import pandas as pd
 import streamlit as st
 
@@ -23,6 +24,7 @@ for key, default in [
     ("notes", ""),
     ("sources", []),
     ("quiz", None),
+    ("quiz_id", ""),
     ("difficulty", "medium"),
     ("results", None),
 ]:
@@ -151,6 +153,8 @@ elif st.session_state.stage == "notes":
             except Exception as exc:
                 st.error(f"Could not generate quiz: {exc}")
             else:
+                # Generate a unique ID for this specific quiz run
+                st.session_state.quiz_id = str(uuid.uuid4())
                 st.session_state.stage = "quiz"
                 st.rerun()
 
@@ -160,6 +164,7 @@ elif st.session_state.stage == "notes":
         st.session_state.notes = ""
         st.session_state.sources = []
         st.session_state.quiz = None
+        st.session_state.quiz_id = ""
         st.session_state.results = None
         st.rerun()
 
@@ -184,7 +189,7 @@ elif st.session_state.stage == "quiz":
             choice = st.radio(
                 question["question"],
                 question["options"],
-                key=f"mcq_{i}",
+                key=f"mcq_{st.session_state.quiz_id}_{i}",
                 index=None,
             )
             mcq_answers.append(choice)
@@ -195,7 +200,7 @@ elif st.session_state.stage == "quiz":
         for i, question in enumerate(quiz.get("short_answer", [])):
             answer = st.text_area(
                 question["question"],
-                key=f"short_{i}",
+                key=f"short_{st.session_state.quiz_id}_{i}",
             )
             short_answers.append(answer)
 
@@ -283,5 +288,6 @@ elif st.session_state.stage == "results":
         st.session_state.notes = ""
         st.session_state.sources = []
         st.session_state.quiz = None
+        st.session_state.quiz_id = ""
         st.session_state.results = None
         st.rerun()
