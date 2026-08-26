@@ -2,7 +2,8 @@
 llm_utils.py
 
 Centralizes the text-generation call so content_generator.py,
-quiz_generator.py, and evaluator.py all go through one place.
+quiz_generator.py, and evaluator.py all go through one place using Groq.
+Includes fallback models in case specific endpoints change on Groq.
 """
 
 import os
@@ -12,8 +13,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Ordered list of Groq models to try (starts with fastest/most popular)
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama3-70b-8192",
+    "mixtral-8x7b-32768",
+]
 
-GROQ_MODEL = "llama-3.1-8b-instant"
 _client = None
 
 
@@ -37,20 +44,23 @@ def _get_client():
 
 
 def generate_text(prompt, temperature=0.2, max_tokens=4096):
-    """Send a single prompt, return the model's text response."""
+    """Send a prompt to Groq, trying available models with fallback logic."""
     client = _get_client()
+    last_exception = None
 
-    try:
-        response = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-    except Exception as e:
-        raise RuntimeError(f"Groq generation failed: {e}") from e
+    for model_name in GROQ_MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            if response.choices and response.choices[0].message.content:
+                return response.choices[0].message.content.strip()
+        except Exception as e:
+            # Catch 404/model_not_found errors and fallback to next model
+            last_exception = e
+            continue
 
-    if not response.choices:
-        raise RuntimeError("Groq returned no response choices.")
-
-    return response.choices[0].message.content or ""
+    raise RuntimeError(f"Groq generation failed across all fallback models: {last_exception}")
