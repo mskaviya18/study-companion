@@ -42,49 +42,28 @@ Required structure:
 """
 
 def _extract_json(text):
-    """Extracts raw JSON structure by locating outer curly braces, stripping thinking blocks,
+    """Extract and parse JSON cleanly from model output."""
+    # Strip <think> reasoning tags
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    and handling invalid unescaped characters inside strings.
-    """
-    # Remove reasoning/thinking tags emitted by thinking models
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-
-    # Find boundaries of the JSON object
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
+    # Locate outermost braces
+    start = text.find("{")
+    end = text.rfind("}")
 
     if start == -1 or end == -1 or end <= start:
-        raise ValueError(
-            f"Model did not return valid JSON. Raw output was:\n{cleaned}"
-        )
+        raise ValueError(f"Model did not return valid JSON. Raw output was:\n{text}")
 
-    json_str = cleaned[start : end + 1]
+    json_str = text[start : end + 1].strip()
 
-    # Strip code block wrappers if left inside bounds
+    # Remove markdown formatting if wrapped inside
     json_str = re.sub(r"^```(?:json)?\s*", "", json_str, flags=re.IGNORECASE)
-    json_str = re.sub(r"\s*```$", "", json_str)
+    json_str = re.sub(r"\s*```$", "", json_str).strip()
 
-    # Attempt standard parse first with strict=False to allow unescaped control chars (like newlines)
+    # Parse with strict=False to handle control characters/newlines smoothly
     try:
         return json.loads(json_str, strict=False)
-    except json.JSONDecodeError:
-        pass
-
-    # If parsing fails, fix unescaped double quotes inside values (e.g. "code": "echo "hello"")
-    def fix_unescaped_quotes(match):
-        key_val = match.group(0)
-        # Fix inner unescaped quotes inside string values
-        return re.sub(r'(?<!\\)"', r'\"', key_val)
-
-    # Sanitize and parse
-    try:
-        # Normalize newlines inside JSON strings
-        sanitized = re.sub(r'(?<!\\)\n', r'\\n', json_str)
-        return json.loads(sanitized, strict=False)
     except json.JSONDecodeError as err:
-        raise ValueError(f"Model returned invalid JSON string syntax: {err}\n\nRaw string:\n{json_str}")
-
-
+        raise ValueError(f"Invalid JSON response: {err}\n\nExtracted String:\n{json_str}")
 def _validate_quiz(quiz, num_mcq, num_short):
     if not isinstance(quiz, dict):
         raise ValueError("Quiz response must be a JSON object.")
@@ -146,8 +125,7 @@ def _validate_quiz(quiz, num_mcq, num_short):
 
     return quiz
 
-
-def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium", max_retries=2):
+def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium", max_retries=3):
     prompt = build_quiz_prompt(
         topic,
         notes,
@@ -161,8 +139,8 @@ def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium", max
         try:
             raw = generate_text(
                 prompt,
-                temperature=0.2,
-                max_tokens=3000,
+                temperature=0.3,
+                max_tokens=4096,  # Ensure enough tokens so JSON is not truncated
             )
 
             quiz = _extract_json(raw)
@@ -177,7 +155,6 @@ def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium", max
             continue
 
     raise RuntimeError(f"Failed to generate a valid quiz after {max_retries} attempts: {last_error}")
-
 
 def print_quiz(quiz):
     print("\n--- Multiple Choice ---")
@@ -208,3 +185,47 @@ if __name__ == "__main__":
 
     print_quiz(quiz)
     print("\nQuiz generated successfully.")
+    
+    import json
+import re
+
+from llm_utils import generate_text
+
+
+def build_quiz_prompt(topic, notes, num_mcq, num_short, difficulty):
+    return f"""You are an expert quiz generator for a student studying "{topic}".
+
+CRITICAL RULE: Base every question strictly on the study notes below.
+CRITICAL RULE: Return ONLY a valid, parseable JSON object. DO NOT include placeholder dots like "...".
+
+Study notes:
+{notes}
+
+REQUIREMENTS:
+1. Generate exactly {num_mcq} multiple-choice questions (MCQs) at {difficulty} difficulty.
+   - Each MCQ must have 4 non-empty string options.
+   - `correct_index` must be an integer from 0 to 3.
+2. Generate exactly {num_short} short-answer questions at {difficulty} difficulty.
+   - Each short-answer question must have an `ideal_answer` string and `key_points` array (2-4 items).
+
+Output JSON schema structure:
+{{
+  "mcq": [
+    {{
+      "question": "Question text here",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_index": 0,
+      "explanation": "Explanation here"
+    }}
+  ],
+  "short_answer": [
+    {{
+      "question": "Question text here",
+      "ideal_answer": "Ideal answer text here",
+      "key_points": ["Key point 1", "Key point 2"]
+    }}
+  ]
+}}
+"""
+
+
