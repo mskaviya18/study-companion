@@ -259,22 +259,21 @@ elif st.session_state.stage == "results":
             )
 
     st.markdown("---")
+    st.markdown("---")
     st.markdown("### Short answer")
     for i, result in enumerate(results["short_answer"], 1):
         st.markdown(f"**Q{i}: {result['question']}**")
 
-        # Highlight the ideal/correct answer first
-        sample_ans = result.get("ideal_answer") or result.get("correct_answer") or "See feedback below."
-        st.success(f"**Correct / Model Answer:** {sample_ans}")
+        # 1. Show model answer or missed points directly
+        model_ans = result.get("ideal_answer") or result.get("correct_answer")
+        if model_ans:
+            st.success(f"**Correct Answer:** {model_ans}")
+        elif result.get("missing_points"):
+            st.warning(f"**Missed Points:** {', '.join(result['missing_points'])}")
 
-        # Display student score & evaluation details clearly underneath
-        st.caption(f"**Your Score:** {result['score']}/100")
-        st.info(f"**Feedback:** {result['feedback']}")
-
-        if result.get("missing_points"):
-            st.warning(f"**Points Missed:** {', '.join(result['missing_points'])}")
+        # 2. Show score directly underneath
+        st.caption(f"**Score:** {result['score']}/100")
         st.markdown("---")
-
     new_mastery = get_topic_mastery(st.session_state.topic)
     st.info(f"Updated mastery for this topic: {new_mastery}/100")
 
