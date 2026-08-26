@@ -247,33 +247,44 @@ elif st.session_state.stage == "results":
     st.subheader(f"Results: {st.session_state.topic}")
     st.metric("Overall score", f"{results['overall_score']}/100")
 
-    st.markdown("**Multiple choice**")
+    st.markdown("### Multiple choice")
     for result in results["mcq"]:
         if result["correct"]:
-            st.success(result["question"])
+            st.success(f"**Question:** {result['question']}")
         else:
             st.error(
-                f"{result['question']}\n\n"
-                f"Correct answer: {result['correct_option']}\n\n"
-                f"{result['explanation']}"
+                f"**Question:** {result['question']}\n\n"
+                f"**Correct answer:** {result['correct_option']}\n\n"
+                f"**Explanation:** {result['explanation']}"
             )
 
-    st.markdown("**Short answer**")
-    for result in results["short_answer"]:
-        st.write(f"**{result['question']}**")
-        st.write(f"Score: {result['score']}/100 — {result['feedback']}")
-        if result["missing_points"]:
-            st.caption(
-                f"You missed: {', '.join(result['missing_points'])}"
-            )
+    st.markdown("---")
+    st.markdown("### Short answer")
+    for i, result in enumerate(results["short_answer"], 1):
+        st.markdown(f"**Q{i}: {result['question']}**")
+
+        # Highlight the ideal/correct answer first
+        sample_ans = result.get("ideal_answer") or result.get("correct_answer") or "See feedback below."
+        st.success(f"**Correct / Model Answer:** {sample_ans}")
+
+        # Display student score & evaluation details clearly underneath
+        st.caption(f"**Your Score:** {result['score']}/100")
+        st.info(f"**Feedback:** {result['feedback']}")
+
+        if result.get("missing_points"):
+            st.warning(f"**Points Missed:** {', '.join(result['missing_points'])}")
+        st.markdown("---")
 
     new_mastery = get_topic_mastery(st.session_state.topic)
     st.info(f"Updated mastery for this topic: {new_mastery}/100")
 
+    # Fetch attempt history and format labels sequentially (Attempt 1, Attempt 2, etc.)
     history = get_topic_attempt_history(st.session_state.topic)
 
     if len(history) >= 2:
         st.markdown(f"**Progress on {st.session_state.topic}**")
+        
+        # Format X-axis sequentially 1..N regardless of raw backend counts
         chart_df = pd.DataFrame(
             {
                 "Score": [entry["score"] for entry in history],
@@ -282,12 +293,11 @@ elif st.session_state.stage == "results":
         )
         st.bar_chart(chart_df)
 
-    # --- NEW: Action Buttons for Retaking or Changing Topics ---
+    # Action Buttons for Retaking or Changing Topics
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button("Retake quiz (Same Topic)", type="primary", use_container_width=True):
-            # Recalculate difficulty based on new mastery score
             st.session_state.difficulty = get_recommended_difficulty(st.session_state.topic)
             
             with st.spinner("Generating a new quiz..."):
@@ -300,7 +310,6 @@ elif st.session_state.stage == "results":
                 except Exception as exc:
                     st.error(f"Could not generate quiz: {exc}")
                 else:
-                    # Generate fresh key ID to clear inputs
                     st.session_state.quiz_id = str(uuid.uuid4())
                     st.session_state.results = None
                     st.session_state.stage = "quiz"
