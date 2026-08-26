@@ -1,20 +1,20 @@
 from pathlib import Path
+import docx
+from PIL import Image
+import pytesseract
+from pypdf import PdfReader
 
 # Streamlit Cloud's system sqlite3 is older than the 3.35.0 that chromadb
-# requires. Swap in the pysqlite3-binary wheel (added to requirements.txt)
-# before chromadb gets a chance to import the system sqlite3 module.
+# requires. Swap in the pysqlite3-binary wheel before chromadb imports sqlite3.
 try:
     __import__("pysqlite3")
     import sys
 
     sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 except ImportError:
-    # Local dev on a machine with a modern system sqlite3 (e.g. recent
-    # macOS/Linux) doesn't need the swap — chromadb will work as-is.
     pass
 
 import chromadb
-from pypdf import PdfReader
 
 STORE_DIR = "chroma_store"
 COLLECTION_NAME = "study_material"
@@ -42,7 +42,7 @@ def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
     step = chunk_size - overlap
 
     for start in range(0, len(text), step):
-        chunk = text[start:start + chunk_size].strip()
+        chunk = text[start : start + chunk_size].strip()
         if chunk:
             chunks.append(chunk)
 
@@ -58,6 +58,19 @@ def extract_text_from_pdf(file_obj):
         pages_text.append(page.extract_text() or "")
 
     return "\n".join(pages_text)
+
+
+def extract_text_from_docx(file_obj):
+    """Extract text from a DOCX file-like object."""
+    doc = docx.Document(file_obj)
+    paragraphs_text = [p.text for p in doc.paragraphs if p.text.strip()]
+    return "\n".join(paragraphs_text)
+
+
+def extract_text_from_image(file_obj):
+    """Extract text from an image file-like object using OCR."""
+    image = Image.open(file_obj)
+    return pytesseract.image_to_string(image)
 
 
 def add_document_to_store(source_name, text):
@@ -104,9 +117,7 @@ def retrieve_context(query, top_k=4):
     metadatas = result.get("metadatas", [[]])[0]
 
     sources = [
-        metadata.get("source", "Unknown")
-        for metadata in metadatas
-        if metadata
+        metadata.get("source", "Unknown") for metadata in metadatas if metadata
     ]
 
     return documents, sources
@@ -121,9 +132,5 @@ def list_sources():
 
     metadata = collection.get().get("metadatas", [])
     return sorted(
-        {
-            item.get("source")
-            for item in metadata
-            if item and item.get("source")
-        }
+        {item.get("source") for item in metadata if item and item.get("source")}
     )
