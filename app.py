@@ -17,7 +17,10 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from rag_utils import add_document_to_store, extract_text_from_pdf, list_sources, delete_source
+from rag_utils import (
+    add_document_to_store, extract_text_from_pdf, extract_text_from_docx,
+    extract_text_from_image, list_sources, delete_source,
+)
 from content_generator import generate_grounded_content, generate_general_content, NoReferenceMaterialError
 from quiz_generator import generate_quiz
 from evaluator import evaluate_quiz
@@ -184,19 +187,13 @@ if not list_sources():
         except Exception:
             pass
 
-# ---- Google Sign-In (Streamlit native auth) ----
-is_logged_in = False
-user_name = None
-try:
-    is_logged_in = st.user.is_logged_in
-    user_name = st.user.name if is_logged_in else None
-except Exception:
-    pass  # auth not configured yet -- app still works, just no personalized greeting
+if "username" not in st.session_state:
+    st.session_state.username = ""
 
 # ---- Banner + top-right menu ----
 banner_col, menu_col = st.columns([7, 1])
 with banner_col:
-    greeting = f"Welcome back, {user_name}" if user_name else "Syllabus → Notes → Quiz"
+    greeting = f"Welcome back, {st.session_state.username}" if st.session_state.username else "Syllabus → Notes → Quiz"
     st.markdown(f"""
     <div class="app-banner">
         <div class="eyebrow">{greeting}</div>
@@ -208,16 +205,10 @@ with banner_col:
 with menu_col:
     with st.popover("☰"):
         st.markdown("**Account**")
-        if is_logged_in:
-            st.write(f"Signed in as **{user_name}**")
-            if st.button("Log out", use_container_width=True):
-                st.logout()
-        else:
-            if st.button("Log in with Google", use_container_width=True):
-                try:
-                    st.login("google")
-                except Exception as e:
-                    st.error(f"Google Sign-In isn't configured yet ({e}). See README.")
+        st.session_state.username = st.text_input(
+            "Your name", value=st.session_state.username, placeholder="e.g. Kaviya",
+            label_visibility="collapsed",
+        )
 
         st.divider()
         st.markdown("**Knowledge base**")
@@ -243,15 +234,21 @@ with menu_col:
 with st.sidebar:
     section_header("book", "Reference material")
     uploaded_files = st.file_uploader(
-        "Add syllabus material (.txt or .pdf)",
-        type=["txt", "pdf"],
+        "Add syllabus material (.txt, .pdf, .docx, or a scanned image)",
+        type=["txt", "pdf", "docx", "png", "jpg", "jpeg"],
         accept_multiple_files=True,
     )
     if uploaded_files and st.button("Add to knowledge base"):
         for f in uploaded_files:
             try:
-                if f.name.endswith(".pdf"):
+                name_lower = f.name.lower()
+                if name_lower.endswith(".pdf"):
                     text = extract_text_from_pdf(f)
+                elif name_lower.endswith(".docx"):
+                    text = extract_text_from_docx(f)
+                elif name_lower.endswith((".png", ".jpg", ".jpeg")):
+                    with st.spinner(f"Running OCR on {f.name}..."):
+                        text = extract_text_from_image(f)
                 else:
                     text = f.read().decode("utf-8", errors="ignore")
 
@@ -261,7 +258,9 @@ with st.sidebar:
 
                 with st.spinner(f"Indexing {f.name}..."):
                     n_chunks = add_document_to_store(f.name, text)
-                st.success(f"{f.name}: {n_chunks} chunks added.")
+                st.success(f"{f.name} added.")
+            except RuntimeError as e:
+                st.error(f"{f.name}: {e}")
             except Exception as e:
                 st.error(f"{f.name}: failed to index ({e})")
 
@@ -299,7 +298,7 @@ if st.session_state.stage == "input":
     if grounded_mode and not indexed:
         st.warning("No material uploaded yet. Upload a file in the sidebar, or switch to general-knowledge mode above.")
 
-    topic = st.text_input("Enter a syllabus topic", placeholder="e.g. Binary Search Trees")
+    topic = st.text_input("Enter a syllabus topic")
     generate_disabled = grounded_mode and not indexed
     if st.button("Generate study notes", type="primary", disabled=generate_disabled) and topic:
         st.session_state.topic = topic

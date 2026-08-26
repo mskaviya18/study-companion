@@ -10,6 +10,9 @@ in llm_utils.py.
 
 import chromadb
 from pypdf import PdfReader
+from docx import Document
+from PIL import Image
+import pytesseract
 
 STORE_DIR = "chroma_store"
 COLLECTION_NAME = "study_material"
@@ -45,6 +48,36 @@ def extract_text_from_pdf(file_obj):
         text = page.extract_text() or ""
         pages_text.append(text)
     return "\n".join(pages_text)
+
+
+def extract_text_from_docx(file_obj):
+    """file_obj: a file-like object (works with Streamlit's UploadedFile or open('rb'))."""
+    doc = Document(file_obj)
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    # Also pull text out of any tables, since syllabus/reference docs often use them
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                if cell.text.strip():
+                    paragraphs.append(cell.text)
+    return "\n".join(paragraphs)
+
+
+def extract_text_from_image(file_obj):
+    """
+    file_obj: a file-like object for a .png/.jpg/.jpeg image, e.g. a scanned page.
+    Requires the Tesseract OCR engine installed separately on the machine --
+    see README for setup. Raises a clear error if it's missing rather than a
+    cryptic one, since this is the most common failure point.
+    """
+    try:
+        image = Image.open(file_obj)
+        return pytesseract.image_to_string(image)
+    except pytesseract.TesseractNotFoundError:
+        raise RuntimeError(
+            "Tesseract OCR engine isn't installed or isn't on your PATH. "
+            "See README.md 'Setting up OCR' section for installation steps."
+        )
 
 
 def add_document_to_store(source_name, text):

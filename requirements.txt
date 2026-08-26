@@ -3,3 +3,6 @@ python-dotenv
 streamlit[auth]>=1.42
 pypdf
 groq
+python-docx
+pytesseract
+Pillow

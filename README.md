@@ -11,9 +11,9 @@ pip install -r requirements.txt
 ```
 
 1. Copy `.env.example` to `.env`
-2. Paste your Gemini API key into `.env`:
+2. Paste your Groq API key into `.env`:
    ```
-   GEMINI_API_KEY=your_actual_key_here
+   GROQ_API_KEY=your_actual_key_here
    ```
 
 ## Usage
@@ -44,3 +44,32 @@ pip install -r requirements.txt
 
 `quiz_generator.py` will take the notes produced here and generate MCQ +
 short-answer questions from them.
+
+## Setting up OCR for scanned images
+
+Uploading `.png`/`.jpg`/`.jpeg` files (e.g. a photographed or scanned page)
+uses OCR to extract text, via the `pytesseract` Python package. That
+package is just a wrapper — it needs the actual **Tesseract OCR engine**
+installed separately on your machine:
+
+**Windows:**
+1. Download the installer from the UB-Mannheim build: search "tesseract ocr windows installer UB-Mannheim" or go to `github.com/UB-Mannheim/tesseract/wiki`
+2. Run the installer (default install path is usually `C:\Program Files\Tesseract-OCR`)
+3. Add that folder to your system PATH, **or** add this line near the top of `rag_utils.py` pointing to your install location:
+   ```python
+   pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+   ```
+
+**Mac:** `brew install tesseract`
+
+**Linux:** `sudo apt install tesseract-ocr`
+
+Without Tesseract installed, uploading `.txt`, `.pdf`, and `.docx` files
+still works fine — only image OCR needs this extra step. If it's missing,
+the app shows a clear error explaining what to install rather than crashing.
+
+**Note on Streamlit Cloud:** free hosting doesn't let you install system
+packages like Tesseract, so OCR uploads won't work on the deployed version
+unless you add a `packages.txt` file (containing the line `tesseract-ocr`)
+to your repo root — Streamlit Cloud reads this file to install Linux
+system packages during deployment.
