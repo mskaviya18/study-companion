@@ -280,14 +280,23 @@ with st.sidebar:
     else:
         for t in summary:
             accent = "#4CE0B3" if t["mastery"] >= 60 else "#FF4D9D"
+            fill_pct = max(0, min(100, t["mastery"]))
             st.markdown(f"""
             <div style="border-left:3px solid {accent}; background:rgba(32,18,69,0.6);
                         border-radius:3px; padding:0.5rem 0.7rem; margin-bottom:0.5rem;">
-                <div style="font-family:'Space Grotesk',sans-serif; font-weight:600; color:#E9E4FB; font-size:0.92rem;">
-                    {t['topic']}
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                    <span style="font-family:'Space Grotesk',sans-serif; font-weight:600; color:#E9E4FB; font-size:0.92rem;">
+                        {t['topic']}
+                    </span>
+                    <span style="font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:{accent};">
+                        {t['mastery']}/100
+                    </span>
                 </div>
-                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:{accent}; margin-top:0.15rem;">
-                    {t['mastery']}/100 · {t['attempts']} attempts
+                <div style="background:rgba(233,228,251,0.12); border-radius:4px; height:6px; margin-top:0.4rem; overflow:hidden;">
+                    <div style="background:{accent}; width:{fill_pct}%; height:100%; border-radius:4px; transition:width 0.4s ease;"></div>
+                </div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:rgba(233,228,251,0.55); margin-top:0.3rem;">
+                    {t['attempts']} attempt{'s' if t['attempts'] != 1 else ''}
                 </div>
             </div>
             """, unsafe_allow_html=True)
