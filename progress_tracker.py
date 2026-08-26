@@ -26,20 +26,15 @@ def init_db():
 def record_quiz_results(topic, results, difficulty):
     """Insert one row per question from an evaluator results dictionary."""
     now = datetime.now(timezone.utc).isoformat()
-
     with sqlite3.connect(DB_PATH) as conn:
-        for result in results.get("mcq", []):
-            score = 100 if result["correct"] else 0
-
-            conn.execute(
-                """
-                INSERT INTO attempts
-                (topic, question_type, score, difficulty, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (topic, "mcq", score, difficulty, now),
-            )
-
+        conn.execute(
+            """
+            INSERT INTO attempts (topic, score, difficulty, timestamp)
+            VALUES (?, ?, ?, datetime('now'))
+            """,
+            (topic, results["overall_score"], difficulty),
+        )
+        conn.commit()
         for result in results.get("short_answer", []):
             conn.execute(
                 """
