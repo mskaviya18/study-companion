@@ -15,9 +15,9 @@ Study notes:
 
 Generate:
 - {num_mcq} multiple-choice questions at {difficulty} difficulty.
-- Each MCQ must have exactly 4 options and exactly one correct option.
+- Each MCQ must have exactly 4 options and exactly one correct option index (0 to 3).
 - {num_short} short-answer questions at {difficulty} difficulty.
-- Each short-answer question must have 2-4 key points.
+- Each short-answer question must have an "ideal_answer" and 2-4 key points.
 
 Return ONLY valid JSON, with no markdown fences and no extra text.
 
@@ -34,6 +34,7 @@ Required structure:
   "short_answer": [
     {{
       "question": "...",
+      "ideal_answer": "...",
       "key_points": ["...", "..."]
     }}
   ]
@@ -133,7 +134,7 @@ def _validate_quiz(quiz, num_mcq, num_short):
     return quiz
 
 
-def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium"):
+def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium", max_retries=2):
     prompt = build_quiz_prompt(
         topic,
         notes,
@@ -142,19 +143,27 @@ def generate_quiz(topic, notes, num_mcq=6, num_short=4, difficulty="medium"):
         difficulty,
     )
 
-    raw = generate_text(
-        prompt,
-        temperature=0.2,
-        max_tokens=3000,
-    )
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            raw = generate_text(
+                prompt,
+                temperature=0.2,
+                max_tokens=3000,
+            )
 
-    quiz = _extract_json(raw)
+            quiz = _extract_json(raw)
 
-    return _validate_quiz(
-        quiz,
-        num_mcq=num_mcq,
-        num_short=num_short,
-    )
+            return _validate_quiz(
+                quiz,
+                num_mcq=num_mcq,
+                num_short=num_short,
+            )
+        except (ValueError, json.JSONDecodeError) as err:
+            last_error = err
+            continue
+
+    raise RuntimeError(f"Failed to generate a valid quiz after {max_retries} attempts: {last_error}")
 
 
 def print_quiz(quiz):
