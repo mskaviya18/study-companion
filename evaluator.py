@@ -23,7 +23,12 @@ MAX_ATTEMPTS = 2
 
 def _strip_code_fences(text):
     text = text.strip()
-    # Remove markdown code block wrappers if the LLM includes them
+
+    # Remove reasoning/thinking tags emitted by thinking models
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = text.strip()
+
+    # Remove markdown code block fences
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s*```$", "", text)
     return text.strip()
