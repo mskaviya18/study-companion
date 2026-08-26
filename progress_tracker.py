@@ -28,6 +28,48 @@ def init_db():
             pass  # Column already exists
 
 
+def record_quiz_results(topic, results, difficulty):
+    """Record individual question scores grouped under a unique attempt_id."""
+    attempt_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).isoformat()
+
+    with sqlite3.connect(DB_PATH) as conn:
+        # 1. Record Multiple Choice results
+        for item in results.get("mcq", []):
+            conn.execute(
+                """
+                INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    topic,
+                    100.0 if item["correct"] else 0.0,
+                    difficulty,
+                    "mcq",
+                    attempt_id,
+                    ts,
+                ),
+            )
+
+        # 2. Record Short Answer results
+        for item in results.get("short_answer", []):
+            conn.execute(
+                """
+                INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    topic,
+                    float(item["score"]),
+                    difficulty,
+                    "short_answer",
+                    attempt_id,
+                    ts,
+                ),
+            )
+
+        conn.commit()
+
 
 def get_topic_mastery(topic):
     """Average score over the most recent ROLLING_WINDOW questions."""
@@ -48,36 +90,6 @@ def get_topic_mastery(topic):
 
     scores = [float(row[0]) for row in rows]
     return round(sum(scores) / len(scores), 1)
-
-
-def get_topic_attempt_history(topic, limit=20):
-    """
-    Return one averaged score per quiz *submission* (not per question) for
-    a topic, oldest first. All question rows written by a single call to
-    record_quiz_results() share the same timestamp, so grouping by
-    timestamp reconstructs one bar per attempt.
-    """
-    with sqlite3.connect(DB_PATH) as conn:
-        rows = conn.execute(
-            """
-            SELECT timestamp, AVG(score)
-            FROM attempts
-            WHERE topic = ?
-            GROUP BY timestamp
-            ORDER BY timestamp ASC
-            """,
-            (topic,),
-        ).fetchall()
-
-    history = [
-        {"timestamp": timestamp, "score": round(avg_score, 1)}
-        for timestamp, avg_score in rows
-    ]
-
-    if limit:
-        history = history[-limit:]
-
-    return history
 
 
 def get_recommended_difficulty(topic):
@@ -109,9 +121,13 @@ def get_all_topics_summary():
         summary = []
 
         for topic in topics:
-            # Count UNIQUE quiz runs (attempt_id) instead of total rows
+            # Count distinct attempt_ids, falling back to distinct timestamps for old legacy data
             count = conn.execute(
-                "SELECT COUNT(DISTINCT attempt_id) FROM attempts WHERE topic = ?",
+                """
+                SELECT COUNT(DISTINCT COALESCE(attempt_id, timestamp)) 
+                FROM attempts 
+                WHERE topic = ?
+                """,
                 (topic,),
             ).fetchone()[0]
 
@@ -128,23 +144,29 @@ def get_all_topics_summary():
         return summary
 
 
-def get_topic_attempt_history(topic):
-    """Return historical scores grouped by quiz run (attempt_id)."""
+def get_topic_attempt_history(topic, limit=20):
+    """Return historical scores grouped by quiz run (attempt_id or timestamp)."""
     with sqlite3.connect(DB_PATH) as conn:
-        # Group by attempt_id to get the average score for each full quiz attempt
+        # Group by attempt_id (or timestamp for legacy rows) to calculate average per quiz run
         rows = conn.execute(
             """
-            SELECT attempt_id, AVG(score) as average_score, MIN(timestamp) as ts
+            SELECT COALESCE(attempt_id, timestamp) as group_key, AVG(score) as average_score, MIN(timestamp) as ts
             FROM attempts
             WHERE topic = ?
-            GROUP BY attempt_id
+            GROUP BY group_key
             ORDER BY ts ASC
             """,
             (topic,),
         ).fetchall()
 
-        return [{"score": row[1]} for row in rows]
-    
+    history = [{"score": round(row[1], 1)} for row in rows]
+
+    if limit:
+        history = history[-limit:]
+
+    return history
+
+
 def get_weak_topics(threshold=WEAK_TOPIC_THRESHOLD):
     return [
         topic
