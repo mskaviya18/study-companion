@@ -23,8 +23,9 @@ MAX_ATTEMPTS = 2
 
 def _strip_code_fences(text):
     text = text.strip()
-    text = re.sub(r"^```(?:json)?", "", text)
-    text = re.sub(r"```$", "", text)
+    # Remove markdown code block wrappers if the LLM includes them
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
     return text.strip()
 
 
@@ -43,7 +44,8 @@ def evaluate_short_answer(question, student_answer):
     """LLM-graded: checks the free-text answer against expected key points.
     Retries once on a malformed response before falling back to a safe default
     so one bad grading call doesn't crash the whole results page."""
-    key_points = question["key_points"]
+    key_points = question.get("key_points", [])
+    ideal_answer = question.get("ideal_answer") or question.get("correct_answer", "")
 
     if not student_answer or not student_answer.strip():
         return {
@@ -51,6 +53,7 @@ def evaluate_short_answer(question, student_answer):
             "covered_points": [],
             "missing_points": key_points,
             "feedback": "No answer was submitted for this question.",
+            "ideal_answer": ideal_answer,
         }
 
     prompt = f"""You are grading a student's short answer against expected key points.
@@ -77,6 +80,9 @@ Return ONLY valid JSON, no markdown fences, in this exact structure:
             result = json.loads(raw)
             if "score" not in result:
                 raise ValueError("Missing 'score' key")
+            
+            # Ensure ideal_answer is attached for app.py UI
+            result["ideal_answer"] = ideal_answer
             return result
         except (json.JSONDecodeError, ValueError) as e:
             last_error = e
@@ -84,13 +90,13 @@ Return ONLY valid JSON, no markdown fences, in this exact structure:
         except RuntimeError:
             raise  # propagate API-level failures immediately
 
-    # Fallback: don't crash the results page over a grading hiccup --
-    # flag it clearly so the student/user knows it wasn't scored properly.
+    # Fallback: don't crash the results page over a grading hiccup
     return {
         "score": 0,
         "covered_points": [],
         "missing_points": key_points,
         "feedback": f"Could not grade this automatically after {MAX_ATTEMPTS} attempts ({last_error}). Please review manually.",
+        "ideal_answer": ideal_answer,
     }
 
 
@@ -151,7 +157,7 @@ if __name__ == "__main__":
 
         mcq_answers = []
         print("\n--- Answer the multiple-choice questions ---")
-        for i, q in enumerate(quiz["mcq"], 1):
+        for i, q in enumerate(quiz.get("mcq", []), 1):
             print(f"\nQ{i}. {q['question']}")
             for j, opt in enumerate(q["options"]):
                 print(f"   {chr(65+j)}. {opt}")
@@ -160,7 +166,7 @@ if __name__ == "__main__":
 
         short_answers = []
         print("\n--- Answer the short-answer questions ---")
-        for i, q in enumerate(quiz["short_answer"], 1):
+        for i, q in enumerate(quiz.get("short_answer", []), 1):
             print(f"\nQ{i}. {q['question']}")
             answer = input("Your answer: ")
             short_answers.append(answer)
