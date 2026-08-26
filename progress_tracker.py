@@ -103,6 +103,32 @@ def get_all_topics_summary():
     return sorted(summary, key=lambda x: x["mastery"])
 
 
+def get_mastery_timeline():
+    """
+    Returns one row per quiz session (all questions submitted together share
+    a timestamp) across every topic: {topic, timestamp (datetime), score}.
+    'score' is that session's average across its questions. Sorted
+    chronologically -- this is the raw series a chart plots directly.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT topic, timestamp, AVG(score) as session_score
+        FROM attempts
+        GROUP BY topic, timestamp
+        ORDER BY timestamp ASC
+    """).fetchall()
+    conn.close()
+
+    timeline = []
+    for topic, timestamp, session_score in rows:
+        timeline.append({
+            "topic": topic,
+            "timestamp": datetime.fromisoformat(timestamp),
+            "score": round(session_score, 1),
+        })
+    return timeline
+
+
 def get_weak_topics(threshold=WEAK_TOPIC_THRESHOLD):
     return [t for t in get_all_topics_summary() if t["mastery"] is not None and t["mastery"] < threshold]
 

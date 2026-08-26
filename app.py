@@ -31,7 +31,10 @@ from progress_tracker import (
     get_all_topics_summary,
     record_quiz_results,
     reset_progress,
+    get_mastery_timeline,
 )
+import pandas as pd
+import altair as alt
 
 st.set_page_config(page_title="AI Study Companion", page_icon="📖", layout="centered")
 load_dotenv()
@@ -226,6 +229,9 @@ with menu_col:
                         st.rerun()
 
         st.divider()
+        if st.button("📈 View progress chart", use_container_width=True):
+            st.session_state.stage = "progress_chart"
+            st.rerun()
         if st.button("Reset all progress data", use_container_width=True):
             reset_progress()
             st.rerun()
@@ -258,7 +264,7 @@ with st.sidebar:
 
                 with st.spinner(f"Indexing {f.name}..."):
                     n_chunks = add_document_to_store(f.name, text)
-                st.success(f"{f.name} added.")
+                st.success(f"{f.name}: {n_chunks} chunks added.")
             except RuntimeError as e:
                 st.error(f"{f.name}: {e}")
             except Exception as e:
@@ -286,8 +292,43 @@ with st.sidebar:
             </div>
             """, unsafe_allow_html=True)
 
+# ---- Stage: interactive progress chart (reachable from the menu at any point) ----
+if st.session_state.stage == "progress_chart":
+    section_header("chart", "Mastery over time")
+
+    timeline = get_mastery_timeline()
+    if not timeline:
+        st.info("No quiz attempts yet. Take a quiz first, then come back to see your trend here.")
+    else:
+        df = pd.DataFrame(timeline)
+        chart = (
+            alt.Chart(df)
+            .mark_line(point=True)
+            .encode(
+                x=alt.X("timestamp:T", title="Date"),
+                y=alt.Y("score:Q", title="Score", scale=alt.Scale(domain=[0, 100])),
+                color=alt.Color("topic:N", title="Topic",
+                                 scale=alt.Scale(range=[T["accent"], T["violet"], T["mint"], T["magenta"], T["accent-light"]])),
+                tooltip=[
+                    alt.Tooltip("topic:N", title="Topic"),
+                    alt.Tooltip("timestamp:T", title="Date", format="%b %d, %Y %H:%M"),
+                    alt.Tooltip("score:Q", title="Score"),
+                ],
+            )
+            .properties(height=380)
+            .configure_axis(labelColor=T["paper"], titleColor=T["paper"], gridColor=T["hair"])
+            .configure_legend(labelColor=T["paper"], titleColor=T["paper"])
+            .configure_view(strokeWidth=0)
+        )
+        st.altair_chart(chart, use_container_width=True)
+        st.caption("Hover over a point to see the exact topic, date, and score for that quiz attempt.")
+
+    if st.button("← Back"):
+        st.session_state.stage = "input"
+        st.rerun()
+
 # ---- Stage 1: topic input ----
-if st.session_state.stage == "input":
+elif st.session_state.stage == "input":
     mode = st.radio(
         "How should notes be generated?",
         ["From my uploaded material (grounded)", "From AI's general knowledge (no upload needed)"],
@@ -298,7 +339,7 @@ if st.session_state.stage == "input":
     if grounded_mode and not indexed:
         st.warning("No material uploaded yet. Upload a file in the sidebar, or switch to general-knowledge mode above.")
 
-    topic = st.text_input("Enter a syllabus topic")
+    topic = st.text_input("Enter a syllabus topic", placeholder="e.g. Binary Search Trees")
     generate_disabled = grounded_mode and not indexed
     if st.button("Generate study notes", type="primary", disabled=generate_disabled) and topic:
         st.session_state.topic = topic
