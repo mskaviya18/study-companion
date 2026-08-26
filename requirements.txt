@@ -1,6 +1,6 @@
 chromadb
 python-dotenv
-streamlit[auth]>=1.42
+streamlit
 pypdf
 groq
 python-docx
