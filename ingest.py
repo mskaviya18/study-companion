@@ -16,7 +16,9 @@ import os
 import glob
 
 from rag_utils import (
-    add_document_to_store, extract_text_from_pdf, extract_text_from_docx,
+    add_document_to_store,
+    extract_text_from_pdf,
+    extract_text_from_docx,
     extract_text_from_image,
 )
 
@@ -24,6 +26,9 @@ DATA_DIR = "data"
 
 
 def main():
+    # Ensure the data directory exists
+    os.makedirs(DATA_DIR, exist_ok=True)
+
     patterns = ["*.txt", "*.pdf", "*.docx", "*.png", "*.jpg", "*.jpeg"]
     all_files = []
     for pattern in patterns:
@@ -47,10 +52,10 @@ def main():
                 with open(file_path, "rb") as f:
                     text = extract_text_from_image(f)
             else:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     text = f.read()
 
-            if not text.strip():
+            if not text or not text.strip():
                 print(f"{source_name}: no extractable text, skipped")
                 continue
 
