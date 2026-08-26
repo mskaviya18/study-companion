@@ -2,22 +2,18 @@
 llm_utils.py
 
 Centralizes the text-generation call so content_generator.py,
-quiz_generator.py, and evaluator.py all go through one place. Currently
-backed by Groq (openai/gpt-oss-20b), which has a far more generous free
-daily quota than Gemini's currently gives to new API keys.
-
-Note: embeddings for RAG still go through Gemini (rag_utils.py) -- that
-quota is separate and wasn't the problem, so no need to change it.
+quiz_generator.py, and evaluator.py all go through one place.
 """
 
 import os
-
+import streamlit as st
 from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_MODEL = "openai/gpt-oss-20b"
+# Updated to a standard high-performance Groq model
+GROQ_MODEL = "llama-3.3-70b-versatile"
 
 _client = None
 
@@ -26,11 +22,14 @@ def _get_client():
     global _client
 
     if _client is None:
+        # Check environment variables first, then Streamlit secrets
         api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key and hasattr(st, "secrets"):
+            api_key = st.secrets.get("GROQ_API_KEY")
 
         if not api_key:
             raise RuntimeError(
-                "GROQ_API_KEY not set. Get a free key at console.groq.com and add it to .env"
+                "GROQ_API_KEY not set. Get a free key at console.groq.com and add it to .env or Streamlit Secrets."
             )
 
         _client = Groq(api_key=api_key)
