@@ -28,44 +28,6 @@ def init_db():
             pass  # Column already exists
 
 
-def record_quiz_results(topic, results, difficulty):
-    attempt_id = str(uuid.uuid4())  # Groups all questions from this single quiz run
-
-    with sqlite3.connect(DB_PATH) as conn:
-        # 1. Record Multiple Choice results
-        for item in results.get("mcq", []):
-            conn.execute(
-                """
-                INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
-                """,
-                (
-                    topic,
-                    100.0 if item["correct"] else 0.0,
-                    difficulty,
-                    "mcq",  # Fixed NOT NULL constraint for MCQ
-                    attempt_id,
-                ),
-            )
-
-        # 2. Record Short Answer results
-        for item in results.get("short_answer", []):
-            conn.execute(
-                """
-                INSERT INTO attempts (topic, score, difficulty, question_type, attempt_id, timestamp)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
-                """,
-                (
-                    topic,
-                    float(item["score"]),
-                    difficulty,
-                    "short_answer",  # Fixed NOT NULL constraint for Short Answer
-                    attempt_id,
-                ),
-            )
-
-        conn.commit()
-
 
 def get_topic_mastery(topic):
     """Average score over the most recent ROLLING_WINDOW questions."""
@@ -147,8 +109,9 @@ def get_all_topics_summary():
         summary = []
 
         for topic in topics:
+            # Count UNIQUE quiz runs (attempt_id) instead of total rows
             count = conn.execute(
-                "SELECT COUNT(*) FROM attempts WHERE topic = ?",
+                "SELECT COUNT(DISTINCT attempt_id) FROM attempts WHERE topic = ?",
                 (topic,),
             ).fetchone()[0]
 
@@ -162,15 +125,26 @@ def get_all_topics_summary():
                 }
             )
 
-    return sorted(
-        summary,
-        key=lambda item: (
-            item["mastery"] is None,
-            item["mastery"] if item["mastery"] is not None else 0,
-        ),
-    )
+        return summary
 
 
+def get_topic_attempt_history(topic):
+    """Return historical scores grouped by quiz run (attempt_id)."""
+    with sqlite3.connect(DB_PATH) as conn:
+        # Group by attempt_id to get the average score for each full quiz attempt
+        rows = conn.execute(
+            """
+            SELECT attempt_id, AVG(score) as average_score, MIN(timestamp) as ts
+            FROM attempts
+            WHERE topic = ?
+            GROUP BY attempt_id
+            ORDER BY ts ASC
+            """,
+            (topic,),
+        ).fetchall()
+
+        return [{"score": row[1]} for row in rows]
+    
 def get_weak_topics(threshold=WEAK_TOPIC_THRESHOLD):
     return [
         topic
