@@ -33,6 +33,7 @@ for key, default in [
 
 st.title("AI Study Companion")
 
+# --- SIDEBAR (Includes progress list, chart, and progress metrics) ---
 with st.sidebar:
     st.header("Your progress")
     summary = get_all_topics_summary()
@@ -42,7 +43,6 @@ with st.sidebar:
     else:
         for topic_summary in summary:
             mastery = topic_summary["mastery"]
-            # Fix display label
             attempts_count = topic_summary.get("attempts", 0)
             label = f"{topic_summary['topic']} — {mastery}/100 ({attempts_count} attempts)"
             
@@ -51,6 +51,34 @@ with st.sidebar:
             else:
                 st.success(label)
 
+    # Sidebar Horizontal Bar Chart & Bottom Progress Summary
+    if st.session_state.topic:
+        history = get_topic_attempt_history(st.session_state.topic)
+        
+        if history:
+            st.divider()
+            st.subheader(f"Progress on {st.session_state.topic}")
+            
+            # Prepare data for horizontal bar chart
+            chart_df = pd.DataFrame(
+                {
+                    "Score": [entry["score"] for entry in history],
+                },
+                index=[f"Attempt {i + 1}" for i in range(len(history))],
+            )
+            
+            # Horizontal bar chart rendering in sidebar
+            st.bar_chart(chart_df, horizontal=True)
+
+            # Bottom Left Clear Progress Metric
+            current_mastery = get_topic_mastery(st.session_state.topic)
+            if current_mastery is not None:
+                st.metric(
+                    label="Current Mastery Score",
+                    value=f"{current_mastery} / 100",
+                )
+
+# --- MAIN VIEWPORT STAGES ---
 if st.session_state.stage == "input":
     mode = st.radio(
         "How do you want to generate notes?",
@@ -153,7 +181,6 @@ elif st.session_state.stage == "notes":
             except Exception as exc:
                 st.error(f"Could not generate quiz: {exc}")
             else:
-                # Generate a unique ID for this specific quiz run
                 st.session_state.quiz_id = str(uuid.uuid4())
                 st.session_state.stage = "quiz"
                 st.rerun()
@@ -263,33 +290,17 @@ elif st.session_state.stage == "results":
     for i, result in enumerate(results["short_answer"], 1):
         st.markdown(f"**Q{i}: {result['question']}**")
 
-        # 1. Show model answer or missed points directly
         model_ans = result.get("ideal_answer") or result.get("correct_answer")
         if model_ans:
             st.success(f"**Correct Answer:** {model_ans}")
         elif result.get("missing_points"):
             st.warning(f"**Missed Points:** {', '.join(result['missing_points'])}")
 
-        # 2. Show score directly underneath
         st.caption(f"**Score:** {result['score']}/100")
         st.markdown("---")
+
     new_mastery = get_topic_mastery(st.session_state.topic)
     st.info(f"Updated mastery for this topic: {new_mastery}/100")
-
-    # Fetch attempt history and format labels sequentially (Attempt 1, Attempt 2, etc.)
-    history = get_topic_attempt_history(st.session_state.topic)
-
-    if len(history) >= 2:
-        st.markdown(f"**Progress on {st.session_state.topic}**")
-        
-        # Format X-axis sequentially 1..N regardless of raw backend counts
-        chart_df = pd.DataFrame(
-            {
-                "Score": [entry["score"] for entry in history],
-            },
-            index=[f"Attempt {i + 1}" for i in range(len(history))],
-        )
-        st.bar_chart(chart_df)
 
     # Action Buttons for Retaking or Changing Topics
     col1, col2 = st.columns(2)
