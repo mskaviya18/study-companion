@@ -113,7 +113,7 @@ if st.session_state.stage == "input":
     else:
         uploaded_file = st.file_uploader(
             "Upload reference material",
-            type=["txt", "pdf"],
+            type=["txt", "pdf", "docx", "png", "jpg", "jpeg"],  # Added image and docx extensions
         )
         topic_label = st.text_input(
             "Label this material (used to track your progress)",
@@ -124,7 +124,7 @@ if st.session_state.stage == "input":
             topic_label = topic_label.strip()
 
             if uploaded_file is None:
-                st.warning("Please upload a .txt or .pdf file.")
+                st.warning("Please upload a supported file (.txt, .pdf, .docx, or image).")
             elif not topic_label:
                 st.warning("Please enter a label for this material.")
             else:
@@ -133,12 +133,17 @@ if st.session_state.stage == "input":
 
                 with st.spinner("Reading document and generating notes..."):
                     try:
-                        if uploaded_file.name.lower().endswith(".pdf"):
+                        file_ext = uploaded_file.name.lower()
+                        if file_ext.endswith(".pdf"):
                             raw_text = extract_text_from_pdf(uploaded_file)
+                        elif file_ext.endswith((".png", ".jpg", ".jpeg")):
+                            from rag_utils import extract_text_from_image
+                            raw_text = extract_text_from_image(uploaded_file)
+                        elif file_ext.endswith(".docx"):
+                            from rag_utils import extract_text_from_docx
+                            raw_text = extract_text_from_docx(uploaded_file)
                         else:
-                            raw_text = uploaded_file.read().decode(
-                                "utf-8", errors="ignore"
-                            )
+                            raw_text = uploaded_file.read().decode("utf-8", errors="ignore")
 
                         notes, sources = generate_content_from_text(
                             topic_label,
