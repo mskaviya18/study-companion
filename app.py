@@ -33,33 +33,31 @@ for key, default in [
 
 st.title("AI Study Companion")
 
-# --- SIDEBAR (Includes progress list, chart, and progress metrics) ---
-# --- SIDEBAR (Includes progress list, chart, and progress metrics) ---
+# --- SIDEBAR (Shows progress only for the currently active topic) ---
 with st.sidebar:
     st.header("Your progress")
-    summary = get_all_topics_summary()
-
-    if not summary:
-        st.write("No attempts yet. Take a quiz to see your progress here.")
+    
+    active_topic = st.session_state.get("topic", "").strip()
+    
+    if not active_topic:
+        st.write("No active topic selected. Generate study notes or take a quiz to track progress.")
     else:
-        for topic_summary in summary:
-            mastery = topic_summary["mastery"]
-            attempts_count = topic_summary.get("attempts", 0)
-            label = f"{topic_summary['topic']} — {mastery}/100 ({attempts_count} attempts)"
+        history = get_topic_attempt_history(active_topic)
+        
+        if not history:
+            st.write(f"No quiz attempts yet for **{active_topic}**.")
+        else:
+            current_mastery = get_topic_mastery(active_topic)
+            attempts_count = len(history)
+            label = f"{active_topic} — {current_mastery}/100 ({attempts_count} attempts)"
             
-            if mastery < 60:
+            if current_mastery < 60:
                 st.warning(label)
             else:
                 st.success(label)
 
-    # Render history chart for current topic if topic is set
-    current_topic = st.session_state.get("topic", "")
-    if current_topic:
-        history = get_topic_attempt_history(current_topic)
-        
-        if history:
             st.divider()
-            st.subheader(f"Progress on {current_topic}")
+            st.subheader(f"Progress on {active_topic}")
             
             # Prepare data for horizontal bar chart
             chart_df = pd.DataFrame(
@@ -72,13 +70,11 @@ with st.sidebar:
             # Render horizontal bars in sidebar
             st.bar_chart(chart_df, horizontal=True)
 
-            # Bottom Left Clear Progress Metric
-            current_mastery = get_topic_mastery(current_topic)
-            if current_mastery is not None:
-                st.metric(
-                    label="Current Mastery Score",
-                    value=f"{current_mastery} / 100",
-                )
+            # Progress metric at the bottom left
+            st.metric(
+                label="Current Mastery Score",
+                value=f"{current_mastery} / 100",
+            )
 # --- MAIN VIEWPORT STAGES ---
 if st.session_state.stage == "input":
     mode = st.radio(
