@@ -34,6 +34,7 @@ for key, default in [
 st.title("AI Study Companion")
 
 # --- SIDEBAR (Includes progress list, chart, and progress metrics) ---
+# --- SIDEBAR (Includes progress list, chart, and progress metrics) ---
 with st.sidebar:
     st.header("Your progress")
     summary = get_all_topics_summary()
@@ -51,13 +52,14 @@ with st.sidebar:
             else:
                 st.success(label)
 
-    # Sidebar Horizontal Bar Chart & Bottom Progress Summary
-    if st.session_state.topic:
-        history = get_topic_attempt_history(st.session_state.topic)
+    # Render history chart for current topic if topic is set
+    current_topic = st.session_state.get("topic", "")
+    if current_topic:
+        history = get_topic_attempt_history(current_topic)
         
         if history:
             st.divider()
-            st.subheader(f"Progress on {st.session_state.topic}")
+            st.subheader(f"Progress on {current_topic}")
             
             # Prepare data for horizontal bar chart
             chart_df = pd.DataFrame(
@@ -67,17 +69,16 @@ with st.sidebar:
                 index=[f"Attempt {i + 1}" for i in range(len(history))],
             )
             
-            # Horizontal bar chart rendering in sidebar
+            # Render horizontal bars in sidebar
             st.bar_chart(chart_df, horizontal=True)
 
             # Bottom Left Clear Progress Metric
-            current_mastery = get_topic_mastery(st.session_state.topic)
+            current_mastery = get_topic_mastery(current_topic)
             if current_mastery is not None:
                 st.metric(
                     label="Current Mastery Score",
                     value=f"{current_mastery} / 100",
                 )
-
 # --- MAIN VIEWPORT STAGES ---
 if st.session_state.stage == "input":
     mode = st.radio(
