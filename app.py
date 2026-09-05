@@ -2,10 +2,8 @@ import uuid
 import pandas as pd
 import streamlit as st
 
-# MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(page_title="AI Study Companion", layout="centered")
 
-# Custom CSS styling
 st.markdown(
     """
     <style>
@@ -14,13 +12,23 @@ st.markdown(
         color: #f5efe6 !important;
     }
     
-    /* Fix text input field background on main light workspace */
+    /* Fix text input box & placeholder background */
+    [data-testid="stTextInput"] div[data-baseweb="input"],
     div[data-baseweb="input"] {
         background-color: #ffffff !important;
         border: 1px solid #d1c7bd !important;
+        border-radius: 8px !important;
     }
-    div[data-baseweb="input"] input {
+
+    /* Input text color */
+    [data-testid="stTextInput"] input {
         color: #2c1d1a !important;
+        background-color: transparent !important;
+    }
+
+    /* Placeholder text visibility */
+    [data-testid="stTextInput"] input::placeholder {
+        color: #8c827a !important;
     }
     </style>
     """,
