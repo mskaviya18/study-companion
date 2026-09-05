@@ -53,6 +53,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 from content_generator import generate_content, generate_content_from_text
 from quiz_generator import generate_quiz
 from evaluator import evaluate_quiz
@@ -125,6 +126,7 @@ with st.sidebar:
                 label="Current Mastery Score",
                 value=f"{current_mastery} / 100",
             )
+
 # --- MAIN VIEWPORT STAGES ---
 if st.session_state.stage == "input":
     mode = st.radio(
@@ -163,7 +165,7 @@ if st.session_state.stage == "input":
     else:
         uploaded_file = st.file_uploader(
             "Upload reference material",
-            type=["txt", "pdf", "docx", "png", "jpg", "jpeg"],  # Added image and docx extensions
+            type=["txt", "pdf", "docx", "png", "jpg", "jpeg"],
         )
         topic_label = st.text_input(
             "Label this material (used to track your progress)",
@@ -354,11 +356,16 @@ elif st.session_state.stage == "results":
     new_mastery = get_topic_mastery(st.session_state.topic)
     st.info(f"Updated mastery for this topic: {new_mastery}/100")
 
-    # Action Buttons for Retaking or Changing Topics
-    col1, col2 = st.columns(2)
+    # Action Buttons: Read Notes, Retake Quiz, or Change Topic
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("Retake quiz (Same Topic)", type="primary", use_container_width=True):
+        if st.button("📖 Read notes again", use_container_width=True):
+            st.session_state.stage = "notes"
+            st.rerun()
+
+    with col2:
+        if st.button("🔄 Retake quiz", type="primary", use_container_width=True):
             st.session_state.difficulty = get_recommended_difficulty(st.session_state.topic)
             
             with st.spinner("Generating a new quiz..."):
@@ -376,8 +383,8 @@ elif st.session_state.stage == "results":
                     st.session_state.stage = "quiz"
                     st.rerun()
 
-    with col2:
-        if st.button("Study another topic", use_container_width=True):
+    with col3:
+        if st.button("➕ Study another topic", use_container_width=True):
             st.session_state.stage = "input"
             st.session_state.topic = ""
             st.session_state.notes = ""
