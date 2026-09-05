@@ -2,6 +2,26 @@ import uuid
 import pandas as pd
 import streamlit as st
 
+st.markdown(
+    """
+    <style>
+    /* Force light text in dark sidebar */
+    [data-testid="stSidebar"] * {
+        color: #f5efe6 !important;
+    }
+    
+    /* Fix text input field background on main light workspace */
+    div[data-baseweb="input"] {
+        background-color: #ffffff !important;
+        border: 1px solid #d1c7bd !important;
+    }
+    div[data-baseweb="input"] input {
+        color: #2c1d1a !important;
+    }
+    </style>
+    """,
+    unsafe_allow_javascript=True
+)
 from content_generator import generate_content, generate_content_from_text
 from quiz_generator import generate_quiz
 from evaluator import evaluate_quiz
