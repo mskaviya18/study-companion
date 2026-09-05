@@ -14,28 +14,29 @@ st.markdown(
         color: #f5efe6 !important;
     }
 
-    /* Force light cream background on ALL text input containers */
-    div[data-baseweb="input"],
-    div[data-baseweb="base-input"],
-    [data-testid="stTextInput"] div[data-baseweb="input"] {
-        background-color: #ffffff !important;
+    /* Force light background on text input wrapper & all inner divs */
+    [data-testid="stTextInput"] > div,
+    [data-testid="stTextInput"] div[data-baseweb="input"],
+    [data-testid="stTextInput"] div[data-baseweb="base-input"] {
+        background-color: #fdfbf7 !important;
         border: 1px solid #d1c7bd !important;
         border-radius: 8px !important;
     }
 
-    /* Target the actual input text element */
-    div[data-baseweb="input"] input,
-    input[data-testid="stCustomTextbox"] {
+    /* Target the raw HTML input element directly */
+    [data-testid="stTextInput"] input {
+        background-color: #fdfbf7 !important;
         color: #2c1d1a !important;
-        background-color: #ffffff !important;
+        -webkit-text-fill-color: #2c1d1a !important;
     }
 
-    /* Placeholder text style */
-    div[data-baseweb="input"] input::placeholder {
+    /* Target placeholder text */
+    [data-testid="stTextInput"] input::placeholder {
         color: #8c827a !important;
+        -webkit-text-fill-color: #8c827a !important;
     }
 
-    /* File Uploader Dropzone styling */
+    /* File Uploader Dropzone: warm cream background */
     [data-testid="stFileUploaderDropzone"],
     [data-testid="stFileUploader"] section {
         background-color: #fdfbf7 !important;
