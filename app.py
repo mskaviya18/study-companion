@@ -14,29 +14,31 @@ st.markdown(
         color: #f5efe6 !important;
     }
 
-    /* Force light background on text input wrapper & all inner divs */
-    [data-testid="stTextInput"] > div,
-    [data-testid="stTextInput"] div[data-baseweb="input"],
-    [data-testid="stTextInput"] div[data-baseweb="base-input"] {
+    /* Fix Textarea (Short Answer Boxes) & Text Inputs */
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stTextInput"] input,
+    div[data-baseweb="textarea"],
+    div[data-baseweb="input"] {
         background-color: #fdfbf7 !important;
+        color: #2c1d1a !important;
+        -webkit-text-fill-color: #2c1d1a !important;
         border: 1px solid #d1c7bd !important;
         border-radius: 8px !important;
     }
 
-    /* Target the raw HTML input element directly */
-    [data-testid="stTextInput"] input {
-        background-color: #fdfbf7 !important;
-        color: #2c1d1a !important;
-        -webkit-text-fill-color: #2c1d1a !important;
-    }
-
-    /* Target placeholder text */
+    /* Placeholder text style */
+    [data-testid="stTextArea"] textarea::placeholder,
     [data-testid="stTextInput"] input::placeholder {
         color: #8c827a !important;
         -webkit-text-fill-color: #8c827a !important;
     }
 
-    /* File Uploader Dropzone: warm cream background */
+    /* Radio button options text visibility */
+    [data-testid="stRadio"] label p {
+        color: #2c1d1a !important;
+    }
+
+    /* File Uploader Dropzone styling */
     [data-testid="stFileUploaderDropzone"],
     [data-testid="stFileUploader"] section {
         background-color: #fdfbf7 !important;
@@ -44,7 +46,6 @@ st.markdown(
         border-radius: 8px !important;
     }
 
-    /* File Uploader inner text */
     [data-testid="stFileUploaderDropzone"] * {
         color: #2c1d1a !important;
     }
