@@ -1,6 +1,11 @@
 import uuid
 import pandas as pd
+import streamlit as st
 
+# MUST BE THE FIRST STREAMLIT COMMAND
+st.set_page_config(page_title="AI Study Companion", layout="centered")
+
+# Custom CSS styling
 st.markdown(
     """
     <style>
@@ -21,6 +26,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 from content_generator import generate_content, generate_content_from_text
 from quiz_generator import generate_quiz
 from evaluator import evaluate_quiz
@@ -34,7 +40,6 @@ from progress_tracker import (
     record_quiz_results,
 )
 
-st.set_page_config(page_title="AI Study Companion", layout="centered")
 init_db()
 
 for key, default in [
