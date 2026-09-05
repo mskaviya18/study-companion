@@ -2,8 +2,10 @@ import uuid
 import pandas as pd
 import streamlit as st
 
+# MUST BE THE FIRST STREAMLIT COMMAND
 st.set_page_config(page_title="AI Study Companion", layout="centered")
 
+# Custom CSS styling
 st.markdown(
     """
     <style>
@@ -12,7 +14,7 @@ st.markdown(
         color: #f5efe6 !important;
     }
     
-    /* Fix text input box & placeholder background */
+    /* Text Inputs: white background, dark text, clean border */
     [data-testid="stTextInput"] div[data-baseweb="input"],
     div[data-baseweb="input"] {
         background-color: #ffffff !important;
@@ -20,21 +22,40 @@ st.markdown(
         border-radius: 8px !important;
     }
 
-    /* Input text color */
+    /* Input inner text */
     [data-testid="stTextInput"] input {
         color: #2c1d1a !important;
         background-color: transparent !important;
     }
 
-    /* Placeholder text visibility */
+    /* Input placeholders */
     [data-testid="stTextInput"] input::placeholder {
         color: #8c827a !important;
+    }
+
+    /* File Uploader Dropzone: warm light cream background */
+    [data-testid="stFileUploaderDropzone"],
+    [data-testid="stFileUploader"] section {
+        background-color: #f8f4ee !important;
+        border: 1.5px dashed #c8b9a6 !important;
+        border-radius: 8px !important;
+    }
+
+    /* File Uploader text & instructions */
+    [data-testid="stFileUploaderDropzone"] * {
+        color: #2c1d1a !important;
+    }
+
+    /* Upload button inside file uploader */
+    [data-testid="stFileUploaderDropzone"] button {
+        background-color: #ffffff !important;
+        color: #2c1d1a !important;
+        border: 1px solid #c8b9a6 !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
 from content_generator import generate_content, generate_content_from_text
 from quiz_generator import generate_quiz
 from evaluator import evaluate_quiz
