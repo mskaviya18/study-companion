@@ -1,6 +1,5 @@
 import uuid
 import pandas as pd
-import streamlit as st
 
 st.markdown(
     """
@@ -20,7 +19,7 @@ st.markdown(
     }
     </style>
     """,
-    unsafe_allow_javascript=True
+    unsafe_allow_html=True
 )
 from content_generator import generate_content, generate_content_from_text
 from quiz_generator import generate_quiz
