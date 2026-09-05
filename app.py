@@ -13,44 +13,39 @@ st.markdown(
     [data-testid="stSidebar"] * {
         color: #f5efe6 !important;
     }
-    
-    /* Text Inputs: white background, dark text, clean border */
-    [data-testid="stTextInput"] div[data-baseweb="input"],
-    div[data-baseweb="input"] {
+
+    /* Force light cream background on ALL text input containers */
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"],
+    [data-testid="stTextInput"] div[data-baseweb="input"] {
         background-color: #ffffff !important;
         border: 1px solid #d1c7bd !important;
         border-radius: 8px !important;
     }
 
-    /* Input inner text */
-    [data-testid="stTextInput"] input {
+    /* Target the actual input text element */
+    div[data-baseweb="input"] input,
+    input[data-testid="stCustomTextbox"] {
         color: #2c1d1a !important;
-        background-color: transparent !important;
+        background-color: #ffffff !important;
     }
 
-    /* Input placeholders */
-    [data-testid="stTextInput"] input::placeholder {
+    /* Placeholder text style */
+    div[data-baseweb="input"] input::placeholder {
         color: #8c827a !important;
     }
 
-    /* File Uploader Dropzone: warm light cream background */
+    /* File Uploader Dropzone styling */
     [data-testid="stFileUploaderDropzone"],
     [data-testid="stFileUploader"] section {
-        background-color: #f8f4ee !important;
+        background-color: #fdfbf7 !important;
         border: 1.5px dashed #c8b9a6 !important;
         border-radius: 8px !important;
     }
 
-    /* File Uploader text & instructions */
+    /* File Uploader inner text */
     [data-testid="stFileUploaderDropzone"] * {
         color: #2c1d1a !important;
-    }
-
-    /* Upload button inside file uploader */
-    [data-testid="stFileUploaderDropzone"] button {
-        background-color: #ffffff !important;
-        color: #2c1d1a !important;
-        border: 1px solid #c8b9a6 !important;
     }
     </style>
     """,
