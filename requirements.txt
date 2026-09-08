@@ -1,10 +1,9 @@
+streamlit
 chromadb
 python-dotenv
-streamlit
 pypdf
 groq
 python-docx
 pytesseract
 Pillow
-pysqlite3-binary
 pandas
