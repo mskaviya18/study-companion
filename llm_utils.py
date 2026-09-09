@@ -1,7 +1,7 @@
 """
 llm_utils.py
 
-Centralizes text generation using Groq API with updated active models.
+Centralizes text generation using Groq API with active supported models.
 """
 
 import os
@@ -16,7 +16,6 @@ GROQ_MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
     "mixtral-8x7b-32768",
-    "gemma2-9b-it",
 ]
 
 _client = None
