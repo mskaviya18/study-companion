@@ -11,12 +11,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Active Groq models (ordered by preference)
+# Active supported Groq models (ordered by preference)
 GROQ_MODELS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.6-27b",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
 ]
 
 _client = None
@@ -26,9 +26,12 @@ def _get_client():
     global _client
 
     if _client is None:
-        api_key = os.environ.get("GROQ_API_KEY")
-        if not api_key and hasattr(st, "secrets"):
-            api_key = st.secrets.get("GROQ_API_KEY")
+        # Check Streamlit secrets first, then fall back to environment variables
+        api_key = None
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            api_key = st.secrets["GROQ_API_KEY"]
+        else:
+            api_key = os.environ.get("GROQ_API_KEY")
 
         if not api_key:
             raise RuntimeError(
